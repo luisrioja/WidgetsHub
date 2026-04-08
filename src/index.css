@@ -2,10 +2,11 @@
 
 /* ============================================
    WIDGET HUB — Nothing Design System
+   Dual theme: Light (aluminum) + Dark
    ============================================ */
 
 @theme {
-  /* Colors — Nothing aluminum palette */
+  /* Light mode colors (default) */
   --color-bg-primary: #d6d6d6;
   --color-surface: #ffffff;
   --color-surface-elevated: #f0f0f0;
@@ -19,6 +20,12 @@
   --color-border: rgba(0, 0, 0, 0.08);
   --color-border-hover: rgba(0, 0, 0, 0.15);
   --color-border-alarm: rgba(255, 0, 0, 0.5);
+  --color-overlay-hover: rgba(0, 0, 0, 0.05);
+  --color-slider-track: rgba(0, 0, 0, 0.1);
+  --color-progress-bg: rgba(0, 0, 0, 0.05);
+  --color-progress-fill: rgba(0, 0, 0, 0.2);
+  --color-glass-gradient-from: rgba(255, 255, 255, 0.6);
+  --color-pixel-figure: #1a1a1a;
 
   /* Fonts */
   --font-dotmatrix: "DotGothic16", monospace;
@@ -29,6 +36,32 @@
   --radius-panel: 20px;
   --radius-button: 12px;
   --radius-pill: 9999px;
+}
+
+/* ============================================
+   Dark mode overrides
+   ============================================ */
+
+:root.dark {
+  --color-bg-primary: #000000;
+  --color-surface: #111111;
+  --color-surface-elevated: #1a1a1a;
+  --color-surface-glass: rgba(255, 255, 255, 0.04);
+  --color-surface-glass-hover: rgba(255, 255, 255, 0.07);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #999999;
+  --color-text-muted: #555555;
+  --color-accent-alarm: #ff0000;
+  --color-accent-alarm-dim: rgba(255, 0, 0, 0.15);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.15);
+  --color-border-alarm: rgba(255, 0, 0, 0.5);
+  --color-overlay-hover: rgba(255, 255, 255, 0.1);
+  --color-slider-track: rgba(255, 255, 255, 0.1);
+  --color-progress-bg: rgba(255, 255, 255, 0.05);
+  --color-progress-fill: rgba(255, 255, 255, 0.2);
+  --color-glass-gradient-from: rgba(255, 255, 255, 0.03);
+  --color-pixel-figure: #ffffff;
 }
 
 /* ============================================
@@ -56,6 +89,7 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   overscroll-behavior: none;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #root {
@@ -75,12 +109,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--color-border);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-border-hover);
 }
 
 /* ============================================
@@ -89,7 +123,6 @@ body {
 
 ::selection {
   background: rgba(255, 0, 0, 0.2);
-  color: #1a1a1a;
 }
 
 /* ============================================
@@ -104,15 +137,6 @@ body {
   50% {
     box-shadow: 0 0 20px 4px rgba(255, 0, 0, 0.3);
     border-color: rgba(255, 0, 0, 1);
-  }
-}
-
-@keyframes scanline {
-  0% {
-    transform: translateY(-100%);
-  }
-  100% {
-    transform: translateY(100vh);
   }
 }
 

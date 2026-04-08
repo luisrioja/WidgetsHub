@@ -19,6 +19,7 @@ import { getWidgetById } from '../lib/WidgetRegistry';
 import { useWidgetStore } from '../lib/widgetStore';
 import SortableItem from './SortableItem';
 import HiddenWidgets from './HiddenWidgets';
+import ThemeToggle from './ThemeToggle';
 
 export default function Dashboard() {
   const widgetOrder = useWidgetStore((s) => s.widgetOrder);
@@ -50,21 +51,24 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 sm:px-8 lg:px-10">
+    <div className="mx-auto max-w-7xl px-8 py-8 sm:px-10 lg:px-12">
       {/* Header */}
-      <header className="mb-8">
-        <h1
-          className="text-2xl tracking-[0.3em] uppercase text-text-primary"
-          style={{ fontFamily: 'var(--font-dotmatrix)' }}
-        >
-          Widget Hub
-        </h1>
-        <p
-          className="mt-1 text-xs tracking-[0.15em] text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Dashboard
-        </p>
+      <header className="mb-8 flex items-start justify-between">
+        <div>
+          <h1
+            className="text-2xl tracking-[0.3em] uppercase text-text-primary"
+            style={{ fontFamily: 'var(--font-dotmatrix)' }}
+          >
+            Widget Hub
+          </h1>
+          <p
+            className="mt-1 text-xs tracking-[0.15em] text-text-muted"
+            style={{ fontFamily: 'var(--font-mono)' }}
+          >
+            Dashboard
+          </p>
+        </div>
+        <ThemeToggle />
       </header>
 
       {/* Widget Grid */}

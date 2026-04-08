@@ -19,24 +19,28 @@ export default function WidgetPanel({
   settingsContent,
 }: WidgetPanelProps) {
   const [showSettings, setShowSettings] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
-  // Close settings when clicking outside
+  // Close settings when clicking outside the popup
   useEffect(() => {
     if (!showSettings) return;
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
         setShowSettings(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    // Small delay so the opening click doesn't immediately close it
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handler);
+    }, 10);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handler);
+    };
   }, [showSettings]);
 
   return (
-    <motion.div
-      ref={panelRef}
-      layout
+    <div
       className={`
         relative rounded-[20px] border
         ${
@@ -47,14 +51,15 @@ export default function WidgetPanel({
         bg-surface transition-colors duration-300 shadow-sm
         ${className}
       `}
-      whileHover={{ scale: 1.01 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
     >
       {/* Glassmorphism overlay */}
-      <div className="pointer-events-none absolute inset-0 rounded-[20px] bg-gradient-to-br from-white/60 to-transparent" />
+      <div
+        className="pointer-events-none absolute inset-0 rounded-[20px] bg-gradient-to-br to-transparent"
+        style={{ '--tw-gradient-from': 'var(--color-glass-gradient-from)' } as React.CSSProperties}
+      />
 
       {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-2">
+      <div className="relative z-30 flex items-center justify-between px-5 pt-4 pb-2">
         <h2
           className="font-mono text-[11px] font-medium tracking-[0.2em] uppercase text-text-muted truncate mr-2"
           style={{ fontFamily: 'var(--font-mono)' }}
@@ -65,9 +70,20 @@ export default function WidgetPanel({
           {/* Settings (three dots) */}
           {settingsContent && (
             <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="group flex h-7 w-7 items-center justify-center rounded-full
-                transition-all duration-200 hover:bg-black/5"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSettings(!showSettings);
+              }}
+              className="group flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200"
+              style={{ backgroundColor: showSettings ? 'var(--color-overlay-hover)' : 'transparent' }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-overlay-hover)';
+              }}
+              onMouseLeave={(e) => {
+                if (!showSettings) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }
+              }}
               title="Settings"
               aria-label={`${title} settings`}
             >
@@ -87,9 +103,17 @@ export default function WidgetPanel({
           {/* Hide button */}
           {onHide && (
             <button
-              onClick={onHide}
-              className="group flex h-7 w-7 items-center justify-center rounded-full
-                transition-all duration-200 hover:bg-black/5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onHide();
+              }}
+              className="group flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200"
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-overlay-hover)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+              }}
               title="Hide widget"
               aria-label={`Hide ${title} widget`}
             >
@@ -115,16 +139,18 @@ export default function WidgetPanel({
       {/* Content */}
       <div className="relative z-10 px-5 pb-5">{children}</div>
 
-      {/* Settings popup overlay */}
+      {/* Settings popup */}
       <AnimatePresence>
         {showSettings && settingsContent && (
           <motion.div
+            ref={popupRef}
             initial={{ opacity: 0, scale: 0.95, y: -8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -8 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-14 right-4 z-50 min-w-[260px] rounded-[16px]
-              border border-border bg-surface p-5 shadow-lg backdrop-blur-sm"
+            className="absolute top-14 right-4 z-[100] min-w-[260px] rounded-[16px]
+              border border-border bg-surface p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
               <h4
@@ -135,8 +161,13 @@ export default function WidgetPanel({
               </h4>
               <button
                 onClick={() => setShowSettings(false)}
-                className="flex h-6 w-6 items-center justify-center rounded-full
-                  hover:bg-black/5 transition-colors"
+                className="flex h-6 w-6 items-center justify-center rounded-full transition-colors"
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-overlay-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <path
@@ -152,6 +183,6 @@ export default function WidgetPanel({
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
