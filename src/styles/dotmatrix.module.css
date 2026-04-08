@@ -9,8 +9,8 @@
 .dotmatrixGlow {
   composes: dotmatrixText;
   text-shadow:
-    0 0 8px rgba(255, 255, 255, 0.4),
-    0 0 20px rgba(255, 255, 255, 0.1);
+    0 0 8px rgba(0, 0, 0, 0.15),
+    0 0 20px rgba(0, 0, 0, 0.05);
 }
 
 .dotmatrixGlowRed {
@@ -33,6 +33,12 @@
   line-height: 1.2;
 }
 
+/* Color override — applied dynamically */
+.dotmatrixColored {
+  composes: dotmatrixText;
+  line-height: 1;
+}
+
 .scanlineOverlay {
   position: absolute;
   top: 0;
@@ -44,8 +50,8 @@
     0deg,
     transparent,
     transparent 2px,
-    rgba(255, 255, 255, 0.01) 2px,
-    rgba(255, 255, 255, 0.01) 4px
+    rgba(0, 0, 0, 0.01) 2px,
+    rgba(0, 0, 0, 0.01) 4px
   );
   z-index: 1;
 }
