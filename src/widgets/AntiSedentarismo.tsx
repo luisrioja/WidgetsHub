@@ -193,18 +193,26 @@ export default function AntiSedentarismo() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [state]);
 
-  // Alarm trigger
+  // Alarm trigger — auto-transition to ACTIVATION after 3s
   useEffect(() => {
-    if (state.phase === 'ALARM' && !alarmFiredRef.current) {
+    if (state.phase !== 'ALARM') return;
+
+    // Play sound & notification only once
+    if (!alarmFiredRef.current) {
       alarmFiredRef.current = true;
       playAlarmBeep();
       sendNotification('⚡ GLUTE ACTIVATION', 'Time to move! Stand up and activate.');
-      const timer = setTimeout(() => {
-        dispatch({ type: 'START_ACTIVATION' });
-        alarmFiredRef.current = false;
-      }, 2500);
-      return () => clearTimeout(timer);
     }
+
+    const timer = setTimeout(() => {
+      dispatch({ type: 'START_ACTIVATION' });
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer);
+      // Reset ref on cleanup so it works after React Strict Mode re-mount
+      alarmFiredRef.current = false;
+    };
   }, [state.phase]);
 
   const handleReset = useCallback(() => { dispatch({ type: 'CONFIRM_RESET' }); }, []);
@@ -233,7 +241,13 @@ export default function AntiSedentarismo() {
               onTogglePause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
               onRestart={() => dispatch({ type: 'RESTART' })} />
           )}
-          {state.phase === 'ALARM' && <AlarmPhase key="alarm" />}
+          {state.phase === 'ALARM' && (
+            <AlarmPhase
+              key="alarm"
+              onStartActivation={() => dispatch({ type: 'START_ACTIVATION' })}
+              onSkip={handleReset}
+            />
+          )}
           {state.phase === 'ACTIVATION' && (
             <ActivationPhase key="activation" secondsLeft={state.secondsLeft}
               totalSeconds={state.activationDuration} isPaused={state.isPaused}
@@ -280,10 +294,10 @@ function RestPhase({ secondsLeft, totalSeconds, isPaused, animationsEnabled, onT
   );
 }
 
-function AlarmPhase() {
+function AlarmPhase({ onStartActivation, onSkip }: { onStartActivation: () => void; onSkip: () => void }) {
   return (
     <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }} className="flex flex-col items-center gap-4">
+      exit={{ opacity: 0, scale: 0.9 }} className="flex flex-col items-center gap-5">
       <motion.div animate={{ scale: [1, 1.2, 1], opacity: [1, 0.6, 1] }}
         transition={{ duration: 0.6, repeat: Infinity }}>
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
@@ -295,6 +309,32 @@ function AlarmPhase() {
       <p className="text-xs tracking-wider text-accent-alarm/70" style={{ fontFamily: 'var(--font-mono)' }}>
         PREPARING ACTIVATION...
       </p>
+
+      {/* Manual buttons */}
+      <div className="flex items-center gap-3 mt-2">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onStartActivation}
+          className="rounded-[12px] border border-accent-alarm/40 bg-accent-alarm/15
+            px-5 py-2.5 text-[11px] font-semibold tracking-[0.15em] uppercase text-accent-alarm
+            transition-colors hover:bg-accent-alarm/25"
+          style={{ fontFamily: 'var(--font-mono)' }}
+        >
+          Start Activation
+        </motion.button>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onSkip}
+          className="rounded-[12px] border border-border
+            px-5 py-2.5 text-[11px] tracking-[0.15em] uppercase text-text-muted
+            transition-colors hover:border-border-hover hover:text-text-secondary"
+          style={{ fontFamily: 'var(--font-mono)' }}
+        >
+          Skip
+        </motion.button>
+      </div>
     </motion.div>
   );
 }
