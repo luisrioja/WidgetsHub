@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/* ============================================
+   ANTIGRAVITY — Nothing Design System
+   ============================================ */
+
+@theme {
+  /* Colors */
+  --color-bg-primary: #000000;
+  --color-surface: #111111;
+  --color-surface-elevated: #1a1a1a;
+  --color-surface-glass: rgba(255, 255, 255, 0.04);
+  --color-surface-glass-hover: rgba(255, 255, 255, 0.07);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #999999;
+  --color-text-muted: #555555;
+  --color-accent-alarm: #ff0000;
+  --color-accent-alarm-dim: rgba(255, 0, 0, 0.15);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.15);
+  --color-border-alarm: rgba(255, 0, 0, 0.5);
+
+  /* Fonts */
+  --font-dotmatrix: "DotGothic16", monospace;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "Roboto Mono", monospace;
+
+  /* Radius */
+  --radius-panel: 20px;
+  --radius-button: 12px;
+  --radius-pill: 9999px;
+}
+
+/* ============================================
+   Global Reset & Base
+   ============================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* ============================================
+   Scrollbar (minimal, Nothing-style)
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================
+   Selection
+   ============================================ */
+
+::selection {
+  background: rgba(255, 0, 0, 0.3);
+  color: #ffffff;
+}
+
+/* ============================================
+   Utility Animations
+   ============================================ */
+
+@keyframes pulse-red {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
+    border-color: rgba(255, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(255, 0, 0, 0.3);
+    border-color: rgba(255, 0, 0, 1);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+@keyframes dot-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 1s ease-in-out infinite;
+}
+
+.animate-dot-blink {
+  animation: dot-blink 1s step-end infinite;
+}
