@@ -37,7 +37,7 @@ export default function HiddenWidgets() {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => showWidget(id)}
                 className="flex items-center gap-2 rounded-[12px] border border-border
-                  bg-surface px-4 py-2.5 text-sm text-text-secondary
+                  bg-surface px-4 py-2.5 text-sm text-text-secondary shadow-sm
                   transition-colors duration-200 hover:border-border-hover
                   hover:bg-surface-elevated hover:text-text-primary"
                 style={{ fontFamily: 'var(--font-mono)' }}

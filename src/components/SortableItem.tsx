@@ -32,9 +32,10 @@ export default function SortableItem({ id, children }: SortableItemProps) {
       className={`touch-none ${isDragging ? 'opacity-80 scale-[1.03]' : ''}`}
       layoutId={id}
     >
-      {/* Drag handle — full top area */}
+      {/* Drag handle — left side only, leaves right buttons clickable */}
       <div
-        className="absolute top-0 left-0 right-0 h-12 z-20 cursor-grab active:cursor-grabbing"
+        className="absolute top-0 left-0 h-12 z-20 cursor-grab active:cursor-grabbing"
+        style={{ width: 'calc(100% - 100px)' }}
         {...attributes}
         {...listeners}
       />

@@ -18,14 +18,12 @@ import { AnimatePresence } from 'framer-motion';
 import { getWidgetById } from '../lib/WidgetRegistry';
 import { useWidgetStore } from '../lib/widgetStore';
 import SortableItem from './SortableItem';
-import WidgetPanel from './WidgetPanel';
 import HiddenWidgets from './HiddenWidgets';
 
 export default function Dashboard() {
   const widgetOrder = useWidgetStore((s) => s.widgetOrder);
   const initializeOrder = useWidgetStore((s) => s.initializeOrder);
   const reorderWidgets = useWidgetStore((s) => s.reorderWidgets);
-  const hideWidget = useWidgetStore((s) => s.hideWidget);
 
   // Initialize on mount
   useEffect(() => {
@@ -52,7 +50,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-6 py-8 sm:px-8 lg:px-10">
       {/* Header */}
       <header className="mb-8">
         <h1
@@ -85,12 +83,7 @@ export default function Dashboard() {
 
                 return (
                   <SortableItem key={id} id={id}>
-                    <WidgetPanel
-                      title={widget.title}
-                      onHide={() => hideWidget(id)}
-                    >
-                      <Component />
-                    </WidgetPanel>
+                    <Component />
                   </SortableItem>
                 );
               })}
