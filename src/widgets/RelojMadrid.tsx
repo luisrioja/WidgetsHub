@@ -140,19 +140,19 @@ function ClockSettingsPanel({
   const presetColors = ['#1a1a1a', '#ff0000', '#0066ff', '#00aa55', '#ff8800', '#9933ff', '#ffffff'];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Time Format */}
       <div>
         <label
-          className="mb-2 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
+          className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
           style={{ fontFamily: 'var(--font-mono)' }}
         >
           Time Format
         </label>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <button
             onClick={() => onChange({ use24h: true })}
-            className={`rounded-[10px] border px-3 py-1.5 text-[11px] tracking-wider transition-all
+            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
               ${settings.use24h
                 ? 'border-text-primary bg-text-primary text-surface'
                 : 'border-border text-text-secondary hover:border-border-hover'
@@ -163,7 +163,7 @@ function ClockSettingsPanel({
           </button>
           <button
             onClick={() => onChange({ use24h: false })}
-            className={`rounded-[10px] border px-3 py-1.5 text-[11px] tracking-wider transition-all
+            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
               ${!settings.use24h
                 ? 'border-text-primary bg-text-primary text-surface'
                 : 'border-border text-text-secondary hover:border-border-hover'
@@ -178,15 +178,15 @@ function ClockSettingsPanel({
       {/* Display Format */}
       <div>
         <label
-          className="mb-2 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
+          className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
           style={{ fontFamily: 'var(--font-mono)' }}
         >
           Display
         </label>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <button
             onClick={() => onChange({ showSeconds: true })}
-            className={`rounded-[10px] border px-3 py-1.5 text-[11px] tracking-wider transition-all
+            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
               ${settings.showSeconds
                 ? 'border-text-primary bg-text-primary text-surface'
                 : 'border-border text-text-secondary hover:border-border-hover'
@@ -197,7 +197,7 @@ function ClockSettingsPanel({
           </button>
           <button
             onClick={() => onChange({ showSeconds: false })}
-            className={`rounded-[10px] border px-3 py-1.5 text-[11px] tracking-wider transition-all
+            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
               ${!settings.showSeconds
                 ? 'border-text-primary bg-text-primary text-surface'
                 : 'border-border text-text-secondary hover:border-border-hover'
@@ -212,17 +212,17 @@ function ClockSettingsPanel({
       {/* Digit Color */}
       <div>
         <label
-          className="mb-2 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
+          className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
           style={{ fontFamily: 'var(--font-mono)' }}
         >
           Digit Color
         </label>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           {presetColors.map((color) => (
             <button
               key={color}
               onClick={() => onChange({ digitColor: color })}
-              className={`h-7 w-7 rounded-full border-2 transition-all
+              className={`h-6 w-6 rounded-full border-2 transition-all
                 ${settings.digitColor === color
                   ? 'border-text-primary scale-110'
                   : 'border-border hover:scale-105'
@@ -232,7 +232,7 @@ function ClockSettingsPanel({
             />
           ))}
           {/* Custom color picker */}
-          <label className="relative h-7 w-7 cursor-pointer">
+          <label className="relative h-6 w-6 cursor-pointer">
             <input
               type="color"
               value={settings.digitColor}
@@ -240,7 +240,7 @@ function ClockSettingsPanel({
               className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             />
             <div
-              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-border
+              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-border
                 bg-gradient-to-br from-red-400 via-green-400 to-blue-400"
               title="Custom color"
             >

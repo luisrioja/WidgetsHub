@@ -11,7 +11,7 @@ export default function ThemeToggle() {
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.9 }}
       onClick={toggleTheme}
-      className="flex h-9 items-center gap-2 rounded-full border border-border px-3
+      className="flex h-10 items-center gap-3 rounded-full border border-border px-4
         transition-colors duration-200 hover:border-border-hover"
       style={{
         backgroundColor: 'var(--color-surface)',
@@ -54,7 +54,7 @@ export default function ThemeToggle() {
           />
         </motion.svg>
       </div>
-      <span className="text-[10px] tracking-[0.15em] uppercase text-text-muted">
+      <span className="text-[11px] tracking-[0.15em] uppercase text-text-muted">
         {isDark ? 'Dark' : 'Light'}
       </span>
     </motion.button>

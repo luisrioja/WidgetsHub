@@ -148,11 +148,11 @@ export default function WidgetPanel({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -8 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-14 right-4 z-[100] min-w-[260px] rounded-[16px]
-              border border-border bg-surface p-5 shadow-xl"
+            className="absolute top-14 right-4 z-[100] min-w-[280px] rounded-[16px]
+              border border-border bg-surface px-6 py-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-5">
               <h4
                 className="text-[11px] font-medium tracking-[0.2em] uppercase text-text-muted"
                 style={{ fontFamily: 'var(--font-mono)' }}

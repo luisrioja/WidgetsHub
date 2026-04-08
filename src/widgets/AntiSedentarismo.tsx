@@ -383,7 +383,7 @@ function TimerSettingsContent({ restDuration, activationDuration, animationsEnab
 }) {
   const restMinutes = Math.floor(restDuration / 60);
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <label className="text-[10px] tracking-[0.15em] uppercase text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
           Animations
@@ -398,7 +398,7 @@ function TimerSettingsContent({ restDuration, activationDuration, animationsEnab
         </button>
       </div>
       <div>
-        <label className="mb-2 block text-[10px] tracking-[0.15em] uppercase text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
+        <label className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
           Rest Duration: {restMinutes} min
         </label>
         <input type="range" min={1} max={180} value={restMinutes}
@@ -408,12 +408,12 @@ function TimerSettingsContent({ restDuration, activationDuration, animationsEnab
             [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
             [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:cursor-pointer"
           style={{ backgroundColor: 'var(--color-slider-track)' }} />
-        <div className="mt-1 flex justify-between text-[9px] text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
+        <div className="mt-2 flex justify-between text-[9px] text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
           <span>1 min</span><span>180 min</span>
         </div>
       </div>
       <div>
-        <label className="mb-2 block text-[10px] tracking-[0.15em] uppercase text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
+        <label className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
           Activation Duration: {activationDuration} sec
         </label>
         <input type="range" min={10} max={300} value={activationDuration}
@@ -423,7 +423,7 @@ function TimerSettingsContent({ restDuration, activationDuration, animationsEnab
             [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
             [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:cursor-pointer"
           style={{ backgroundColor: 'var(--color-slider-track)' }} />
-        <div className="mt-1 flex justify-between text-[9px] text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
+        <div className="mt-2 flex justify-between text-[9px] text-text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
           <span>10 sec</span><span>300 sec</span>
         </div>
       </div>
