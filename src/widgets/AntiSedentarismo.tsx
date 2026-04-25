@@ -25,10 +25,12 @@ interface State {
   activationDuration: number;
   isPaused: boolean;
   animationsEnabled: boolean;
+  /** Timestamp (ms) when secondsLeft was last anchored — used to calculate real elapsed time */
+  tickAnchor: number;
 }
 
 type Action =
-  | { type: 'TICK' }
+  | { type: 'SYNC'; now: number }
   | { type: 'TRIGGER_ALARM' }
   | { type: 'START_ACTIVATION' }
   | { type: 'CONFIRM_RESET' }
@@ -56,6 +58,7 @@ interface PersistedState {
   isPaused: boolean;
   animationsEnabled: boolean;
   savedAt: number;
+  tickAnchor: number;
 }
 
 function saveState(state: State) {
@@ -67,16 +70,20 @@ function saveState(state: State) {
     isPaused: state.isPaused,
     animationsEnabled: state.animationsEnabled,
     savedAt: Date.now(),
+    tickAnchor: state.tickAnchor,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 }
 
 function loadState(): State {
+  const now = Date.now();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) throw new Error('no saved state');
     const saved: PersistedState = JSON.parse(raw);
-    const elapsedSeconds = Math.floor((Date.now() - saved.savedAt) / 1000);
+
+    // Use tickAnchor if available, otherwise fall back to savedAt
+    const anchor = saved.tickAnchor || saved.savedAt;
 
     if (saved.isPaused) {
       return {
@@ -86,9 +93,11 @@ function loadState(): State {
         activationDuration: saved.activationDuration,
         isPaused: true,
         animationsEnabled: saved.animationsEnabled,
+        tickAnchor: now,
       };
     }
 
+    const elapsedSeconds = Math.floor((now - anchor) / 1000);
     let adjustedSeconds = saved.secondsLeft - elapsedSeconds;
 
     if (adjustedSeconds <= 0) {
@@ -97,6 +106,7 @@ function loadState(): State {
           phase: 'ALARM', secondsLeft: 0,
           restDuration: saved.restDuration, activationDuration: saved.activationDuration,
           isPaused: false, animationsEnabled: saved.animationsEnabled,
+          tickAnchor: now,
         };
       }
       if (saved.phase === 'ACTIVATION') {
@@ -104,6 +114,7 @@ function loadState(): State {
           phase: 'REST', secondsLeft: saved.restDuration,
           restDuration: saved.restDuration, activationDuration: saved.activationDuration,
           isPaused: false, animationsEnabled: saved.animationsEnabled,
+          tickAnchor: now,
         };
       }
       adjustedSeconds = 0;
@@ -113,12 +124,14 @@ function loadState(): State {
       phase: saved.phase, secondsLeft: adjustedSeconds,
       restDuration: saved.restDuration, activationDuration: saved.activationDuration,
       isPaused: false, animationsEnabled: saved.animationsEnabled,
+      tickAnchor: now,
     };
   } catch {
     return {
       phase: 'REST', secondsLeft: DEFAULT_REST,
       restDuration: DEFAULT_REST, activationDuration: DEFAULT_ACTIVATION,
       isPaused: false, animationsEnabled: true,
+      tickAnchor: now,
     };
   }
 }
@@ -129,30 +142,47 @@ function loadState(): State {
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'TICK': {
+    case 'SYNC': {
       if (state.isPaused) return state;
-      if (state.secondsLeft <= 1) {
-        if (state.phase === 'REST') return { ...state, phase: 'ALARM', secondsLeft: 0 };
-        if (state.phase === 'ACTIVATION') return { ...state, phase: 'REST', secondsLeft: state.restDuration };
+      // Calculate real elapsed time since the anchor
+      const elapsed = Math.floor((action.now - state.tickAnchor) / 1000);
+      const remaining = state.secondsLeft - elapsed;
+
+      if (remaining <= 0) {
+        if (state.phase === 'REST') {
+          return { ...state, phase: 'ALARM', secondsLeft: 0, tickAnchor: action.now };
+        }
+        if (state.phase === 'ACTIVATION') {
+          return { ...state, phase: 'REST', secondsLeft: state.restDuration, tickAnchor: action.now };
+        }
       }
-      return { ...state, secondsLeft: state.secondsLeft - 1 };
+      return { ...state, secondsLeft: remaining, tickAnchor: action.now };
     }
     case 'TRIGGER_ALARM':
-      return { ...state, phase: 'ALARM', secondsLeft: 0 };
+      return { ...state, phase: 'ALARM', secondsLeft: 0, tickAnchor: Date.now() };
     case 'START_ACTIVATION':
-      return { ...state, phase: 'ACTIVATION', secondsLeft: state.activationDuration, isPaused: false };
+      return { ...state, phase: 'ACTIVATION', secondsLeft: state.activationDuration, isPaused: false, tickAnchor: Date.now() };
     case 'CONFIRM_RESET':
-      return { ...state, phase: 'REST', secondsLeft: state.restDuration, isPaused: false };
-    case 'TOGGLE_PAUSE':
-      return { ...state, isPaused: !state.isPaused };
-    case 'RESTART':
-      if (state.phase === 'REST') return { ...state, secondsLeft: state.restDuration, isPaused: false };
-      if (state.phase === 'ACTIVATION') return { ...state, secondsLeft: state.activationDuration, isPaused: false };
+      return { ...state, phase: 'REST', secondsLeft: state.restDuration, isPaused: false, tickAnchor: Date.now() };
+    case 'TOGGLE_PAUSE': {
+      const nowPausing = !state.isPaused;
+      // When unpausing, reset anchor to now so elapsed calculation restarts from 0
+      return { ...state, isPaused: nowPausing, tickAnchor: nowPausing ? state.tickAnchor : Date.now() };
+    }
+    case 'RESTART': {
+      const now = Date.now();
+      if (state.phase === 'REST') return { ...state, secondsLeft: state.restDuration, isPaused: false, tickAnchor: now };
+      if (state.phase === 'ACTIVATION') return { ...state, secondsLeft: state.activationDuration, isPaused: false, tickAnchor: now };
       return state;
-    case 'UPDATE_REST_DURATION':
-      return { ...state, restDuration: action.payload, secondsLeft: state.phase === 'REST' ? action.payload : state.secondsLeft };
-    case 'UPDATE_ACTIVATION_DURATION':
-      return { ...state, activationDuration: action.payload, secondsLeft: state.phase === 'ACTIVATION' ? action.payload : state.secondsLeft };
+    }
+    case 'UPDATE_REST_DURATION': {
+      const now = Date.now();
+      return { ...state, restDuration: action.payload, secondsLeft: state.phase === 'REST' ? action.payload : state.secondsLeft, tickAnchor: now };
+    }
+    case 'UPDATE_ACTIVATION_DURATION': {
+      const now = Date.now();
+      return { ...state, activationDuration: action.payload, secondsLeft: state.phase === 'ACTIVATION' ? action.payload : state.secondsLeft, tickAnchor: now };
+    }
     case 'TOGGLE_ANIMATIONS':
       return { ...state, animationsEnabled: !state.animationsEnabled };
     case 'LOAD_STATE':
@@ -173,11 +203,29 @@ export default function AntiSedentarismo() {
 
   useEffect(() => { requestNotificationPermission(); }, []);
 
-  // Timer tick
+  // Timer sync — uses real timestamps, immune to background tab throttling
   useEffect(() => {
     if (state.phase === 'ALARM' || state.isPaused) return;
-    const interval = setInterval(() => dispatch({ type: 'TICK' }), 1000);
-    return () => clearInterval(interval);
+
+    // SYNC every second for UI updates; the actual elapsed time is
+    // computed from Date.now() vs tickAnchor, so even if the browser
+    // throttles intervals, the next tick auto-corrects.
+    const interval = setInterval(() => {
+      dispatch({ type: 'SYNC', now: Date.now() });
+    }, 1000);
+
+    // Also sync immediately when the tab regains focus
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        dispatch({ type: 'SYNC', now: Date.now() });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [state.phase, state.isPaused]);
 
   // Persist state
