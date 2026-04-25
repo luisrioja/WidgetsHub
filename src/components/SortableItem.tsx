@@ -29,12 +29,12 @@ export default function SortableItem({ id, children }: SortableItemProps) {
     <motion.div
       ref={setNodeRef}
       style={style}
-      className={`touch-none ${isDragging ? 'opacity-80 scale-[1.03]' : ''}`}
+      className={isDragging ? 'opacity-80 scale-[1.03]' : ''}
       layoutId={id}
     >
-      {/* Drag handle — left side only, leaves right buttons clickable */}
+      {/* Drag handle — covers ONLY the header bar (title area) */}
       <div
-        className="absolute top-0 left-0 h-12 z-20 cursor-grab active:cursor-grabbing"
+        className="absolute top-0 left-0 h-10 z-20 cursor-grab active:cursor-grabbing touch-none"
         style={{ width: 'calc(100% - 100px)' }}
         {...attributes}
         {...listeners}
