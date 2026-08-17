@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { syncStorage } from './syncStorage';
 
 /**
  * Glute activation timer state.
@@ -312,6 +313,7 @@ export const useGluteStore = create<GluteState>()(
     {
       name: 'widgethub-glute',
       version: 1,
+      storage: createJSONStorage(() => syncStorage),
       partialize: (s) => ({
         phase: s.phase,
         deadline: s.deadline,

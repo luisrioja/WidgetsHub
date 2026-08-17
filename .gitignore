@@ -28,3 +28,6 @@ ARQUITECTURA-GLOBAL.md
 
 # Vendored clone of the Nothing design skill (has its own .git).
 nothing-design-skill/
+
+# Runtime data: SQLite database and secrets. Never versioned.
+data/

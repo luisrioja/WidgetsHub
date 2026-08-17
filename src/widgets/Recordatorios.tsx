@@ -10,6 +10,7 @@ import {
 import WidgetPanel from '../components/WidgetPanel';
 import { Button, Icon, Segmented } from '../components/ui';
 import { useWidgetStore } from '../lib/widgetStore';
+import { readState, writeState } from '../lib/syncStorage';
 
 export const title = 'Reminders';
 export const defaultSize = { cols: 1, rows: 1 };
@@ -54,21 +55,16 @@ const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2, no
 const DEFAULTS: RemindersState = { reminders: [], filter: 'open', sortBy: 'manual' };
 
 function loadState(): RemindersState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    const saved = JSON.parse(raw) as Partial<RemindersState> & {
-      showCompleted?: boolean;
-    };
-    return {
+  const saved = readState<
+    (Partial<RemindersState> & { showCompleted?: boolean }) | null
+  >(STORAGE_KEY, null);
+  if (!saved) return DEFAULTS;
+  return {
       reminders: saved.reminders ?? [],
       // The old shape stored a boolean toggle rather than a filter.
       filter: saved.filter ?? (saved.showCompleted === false ? 'open' : 'all'),
-      sortBy: saved.sortBy ?? 'manual',
-    };
-  } catch {
-    return DEFAULTS;
-  }
+    sortBy: saved.sortBy ?? 'manual',
+  };
 }
 
 /* ============================================================
@@ -84,7 +80,7 @@ export default function Reminders() {
   const hideWidget = useWidgetStore((s) => s.hideWidget);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    writeState(STORAGE_KEY, state);
   }, [state]);
 
   useEffect(() => {

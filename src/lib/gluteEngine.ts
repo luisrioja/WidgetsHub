@@ -1,6 +1,7 @@
 import { useGluteStore, remainingSeconds, type GlutePhase } from './gluteStore';
 import { playAlarm, playComplete, playNag, playTick } from './audio';
 import { sendNotification } from './notifications';
+import { onStateChange, readState } from './syncStorage';
 
 /**
  * Drives the glute timer for the whole app.
@@ -35,7 +36,9 @@ function claimBeep(now: number, minGapMs = 1500): boolean {
 /** Carries the durations over from the pre-refactor widget-local state. */
 function migrateLegacyState(): void {
   try {
-    if (localStorage.getItem(PERSIST_KEY)) return;
+    // Skip once this user already has server-side timer state; only a browser
+    // that never synced can still hold the pre-refactor blob.
+    if (readState<unknown>(PERSIST_KEY, null) !== null) return;
     const raw = localStorage.getItem(LEGACY_KEY);
     if (!raw) return;
 
@@ -140,13 +143,14 @@ export function startGluteEngine(): () => void {
   document.addEventListener('visibilitychange', onWake);
   window.addEventListener('focus', onWake);
 
-  // Keep sibling tabs in sync with whichever one the user acted in.
-  const onStorage = (e: StorageEvent) => {
-    if (e.key !== PERSIST_KEY) return;
+  // Keep sibling tabs in sync with whichever one the user acted in. State no
+  // longer lives in localStorage, so this arrives over the state channel
+  // rather than the `storage` event.
+  const unsubscribe = onStateChange((key) => {
+    if (key !== PERSIST_KEY) return;
     void useGluteStore.persist.rehydrate();
     prevPhase = useGluteStore.getState().phase;
-  };
-  window.addEventListener('storage', onStorage);
+  });
 
   tick();
 
@@ -154,6 +158,6 @@ export function startGluteEngine(): () => void {
     window.clearInterval(interval);
     document.removeEventListener('visibilitychange', onWake);
     window.removeEventListener('focus', onWake);
-    window.removeEventListener('storage', onStorage);
+    unsubscribe();
   };
 }

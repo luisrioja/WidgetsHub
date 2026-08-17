@@ -1,277 +1,181 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useState } from 'react';
 import WidgetPanel from '../components/WidgetPanel';
+import { Segmented, SegmentedBar, Slider } from '../components/ui';
 import { useWidgetStore } from '../lib/widgetStore';
+import { readState, writeState } from '../lib/syncStorage';
 
 export const title = 'Treadmill Steps';
 export const defaultSize = { cols: 1, rows: 1 };
 
-/* ============================================
-   Config & Persistence
-   ============================================ */
+const STORAGE_KEY = 'widgethub-treadmill-steps';
+
+type StrideMode = 'walk' | 'run';
 
 interface StepsConfig {
   heightCm: number;
-  strideMode: 'walk' | 'run';
+  strideMode: StrideMode;
 }
 
-const STORAGE_KEY = 'widgethub-treadmill-steps';
+/** Stride length as a fraction of height — the usual pedometer approximation. */
+const STRIDE_FACTOR: Record<StrideMode, number> = { walk: 0.414, run: 0.65 };
 
-// Walking stride ≈ height × 0.414, Running stride ≈ height × 0.65
-const STRIDE_FACTOR = { walk: 0.414, run: 0.65 };
+const HEIGHT_RANGE = { min: 140, max: 215 };
+
+// Deliberately a neutral placeholder rather than anyone's real height: this
+// repository is public, and the value is per-user state anyway.
+const DEFAULTS: StepsConfig = { heightCm: 175, strideMode: 'walk' };
+
+const PRESETS = [1, 2, 3, 5, 10];
 
 function loadConfig(): StepsConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) throw new Error('no config');
-    return JSON.parse(raw);
-  } catch {
-    return { heightCm: 192, strideMode: 'walk' };
-  }
+  return { ...DEFAULTS, ...readState<Partial<StepsConfig>>(STORAGE_KEY, {}) };
 }
-
-function saveConfig(config: StepsConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-}
-
-/* ============================================
-   Helpers
-   ============================================ */
-
-function calculateSteps(km: number, heightCm: number, mode: 'walk' | 'run'): number {
-  const strideLengthM = (heightCm * STRIDE_FACTOR[mode]) / 100;
-  if (strideLengthM <= 0) return 0;
-  return Math.round((km * 1000) / strideLengthM);
-}
-
-function formatSteps(steps: number): string {
-  return steps.toLocaleString('es-ES');
-}
-
-/* ============================================
-   Component
-   ============================================ */
 
 export default function PasosCinta() {
   const [config, setConfig] = useState<StepsConfig>(loadConfig);
-  const [inputValue, setInputValue] = useState('');
-  const [km, setKm] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [input, setInput] = useState('');
   const hideWidget = useWidgetStore((s) => s.hideWidget);
 
-  useEffect(() => {
-    saveConfig(config);
-  }, [config]);
-
-  const handleInput = useCallback((value: string) => {
-    // Allow digits, dots and commas
-    const sanitized = value.replace(/[^0-9.,]/g, '');
-    setInputValue(sanitized);
-    const parsed = parseFloat(sanitized.replace(',', '.'));
-    setKm(isNaN(parsed) ? 0 : parsed);
+  const update = useCallback((partial: Partial<StepsConfig>) => {
+    setConfig((prev) => {
+      const next = { ...prev, ...partial };
+      writeState(STORAGE_KEY, next);
+      return next;
+    });
   }, []);
 
-  const steps = calculateSteps(km, config.heightCm, config.strideMode);
-  const strideLengthCm = Math.round(config.heightCm * STRIDE_FACTOR[config.strideMode]);
+  const km = parseKm(input);
+  const strideCm = Math.round(config.heightCm * STRIDE_FACTOR[config.strideMode]);
+  const steps = strideCm > 0 ? Math.round((km * 100_000) / strideCm) : 0;
 
   return (
     <WidgetPanel
       title="Treadmill Steps"
       onHide={() => hideWidget('PasosCinta')}
       settingsContent={
-        <StepsSettings
-          config={config}
-          strideLengthCm={strideLengthCm}
-          onChange={(updates) => setConfig((prev) => ({ ...prev, ...updates }))}
-        />
+        <StepsSettings config={config} strideCm={strideCm} onChange={update} />
       }
     >
-      <div className="flex flex-col items-center gap-4 py-2">
-        {/* Distance input */}
-        <div className="relative w-full max-w-[200px]">
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="decimal"
-            value={inputValue}
-            onChange={(e) => handleInput(e.target.value)}
-            placeholder="0"
-            className="w-full bg-transparent text-center text-[40px] font-light text-text-primary
-              outline-none placeholder:text-text-muted/30 caret-text-primary"
-            style={{ fontFamily: 'var(--font-body)' }}
-          />
-          <div
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-[1px] w-3/4 transition-all duration-300"
-            style={{
-              background: km > 0
-                ? 'linear-gradient(90deg, transparent, var(--color-text-muted), transparent)'
-                : 'linear-gradient(90deg, transparent, var(--color-text-muted)/30, transparent)',
-            }}
-          />
+      <div className="flex flex-1 flex-col">
+        <p className="nd-label">Steps</p>
+
+        {/* Layer 1 — the converted figure, the reason the widget exists. */}
+        <div className="mt-3 flex items-baseline gap-2">
+          {/* Doto renders an em-dash as a smear of dots, so the resting state
+              is an honest zero rather than a placeholder glyph. */}
           <span
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] tracking-[0.1em] uppercase text-text-muted"
-            style={{ fontFamily: 'var(--font-mono)' }}
+            className={`nd-display text-display-lg ${
+              steps > 0 ? '' : 'text-ink-disabled'
+            }`}
           >
-            km
+            {steps.toLocaleString('es-ES')}
           </span>
         </div>
 
-        {/* Steps result */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={steps}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-            className="flex flex-col items-center gap-1"
-          >
-            <span
-              className={`text-[28px] font-semibold tracking-tight transition-colors duration-300 ${
-                steps > 0 ? 'text-text-primary' : 'text-text-muted/30'
-              }`}
-              style={{ fontFamily: 'var(--font-body)' }}
-            >
-              {steps > 0 ? formatSteps(steps) : '—'}
-            </span>
-            <span
-              className="text-[10px] tracking-[0.2em] uppercase text-text-muted"
-              style={{ fontFamily: 'var(--font-mono)' }}
-            >
-              steps
-            </span>
-          </motion.div>
-        </AnimatePresence>
+        {/* Distance entry — underline input, the lightest container that works. */}
+        <div className="mt-6 flex items-baseline gap-3 border-b border-line-strong pb-2
+          focus-within:border-ink-display transition-colors duration-200 ease-nd">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value.replace(/[^0-9.,]/g, ''))}
+            inputMode="decimal"
+            placeholder="0"
+            aria-label="Distance in kilometres"
+            className="nd-data min-w-0 flex-1 bg-transparent text-heading text-ink
+              outline-none placeholder:text-ink-disabled"
+          />
+          <span className="nd-label">KM</span>
+        </div>
 
-        {/* Mode indicator */}
-        <div className="flex items-center gap-2">
-          {(['walk', 'run'] as const).map((mode) => (
-            <motion.button
-              key={mode}
-              whileTap={{ scale: 0.92 }}
-              onClick={() => setConfig((prev) => ({ ...prev, strideMode: mode }))}
-              className={`flex items-center gap-1.5 rounded-[10px] border px-3 py-1.5 text-[10px]
-                tracking-[0.12em] uppercase transition-all duration-200
-                ${config.strideMode === mode
-                  ? 'border-text-primary bg-text-primary text-surface'
-                  : 'border-border text-text-muted hover:border-border-hover hover:text-text-secondary'
+        <div className="mt-4">
+          <Segmented
+            label="Stride mode"
+            value={config.strideMode}
+            options={[
+              { value: 'walk' as StrideMode, label: 'Walk' },
+              { value: 'run' as StrideMode, label: 'Run' },
+            ]}
+            onChange={(strideMode) => update({ strideMode })}
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {PRESETS.map((preset) => (
+            <button
+              key={preset}
+              onClick={() => setInput(String(preset))}
+              className={`rounded-pill border px-3 py-1 font-mono text-[10px] uppercase
+                tracking-[0.08em] transition-colors duration-200 ease-nd
+                ${
+                  km === preset
+                    ? 'border-ink-display text-ink-display'
+                    : 'border-line-strong text-ink-disabled hover:border-ink-display hover:text-ink-display'
                 }`}
-              style={{ fontFamily: 'var(--font-mono)' }}
             >
-              {mode === 'walk' ? (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <circle cx="6" cy="2" r="1.5" fill="currentColor" />
-                  <path d="M5 4.5l-1.5 3.5h1.5L6 11M7 4.5l1.5 3.5H7L6 11M4.5 6h3" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <circle cx="7" cy="2" r="1.5" fill="currentColor" />
-                  <path d="M5 4l-2 4h2l.5 3M8 4l2 3H8l-.5 3M4 5.5h4.5" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-              {mode === 'walk' ? 'Walk' : 'Run'}
-            </motion.button>
+              {preset} km
+            </button>
           ))}
         </div>
 
-        {/* Quick presets */}
-        {km === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-wrap justify-center gap-1.5 mt-1"
-          >
-            {[1, 2, 3, 5, 10].map((preset) => (
-              <button
-                key={preset}
-                onClick={() => { setInputValue(String(preset)); setKm(preset); }}
-                className="rounded-[8px] border border-border/50 px-2.5 py-1 text-[10px]
-                  text-text-muted transition-colors hover:border-border-hover hover:text-text-secondary"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              >
-                {preset} km
-              </button>
-            ))}
-          </motion.div>
-        )}
+        <div className="mt-auto space-y-3 border-t border-line pt-4">
+          <div className="flex items-baseline justify-between">
+            <span className="nd-label">Stride</span>
+            <span className="nd-data text-body-sm text-ink-display">
+              {strideCm} <span className="text-ink-muted">cm</span>
+            </span>
+          </div>
+
+          {/* Stride against the plausible range — proportion beside the number. */}
+          <SegmentedBar
+            progress={(strideCm - 55) / (140 - 55)}
+            segments={20}
+            height={5}
+            label="Stride length within the usual range"
+          />
+        </div>
       </div>
     </WidgetPanel>
   );
 }
 
-/* ============================================
-   Settings Panel
-   ============================================ */
-
 function StepsSettings({
   config,
-  strideLengthCm,
+  strideCm,
   onChange,
 }: {
   config: StepsConfig;
-  strideLengthCm: number;
-  onChange: (updates: Partial<StepsConfig>) => void;
+  strideCm: number;
+  onChange: (partial: Partial<StepsConfig>) => void;
 }) {
   return (
-    <div className="space-y-6">
-      {/* Height */}
-      <div>
-        <label
-          className="mb-2 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Your Height
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            value={config.heightCm}
-            onChange={(e) => onChange({ heightCm: Math.max(100, Math.min(230, Number(e.target.value))) })}
-            className="w-20 rounded-[8px] border border-border bg-transparent px-2.5 py-1.5
-              text-center text-[13px] text-text-primary outline-none
-              focus:border-text-primary transition-colors"
-            style={{ fontFamily: 'var(--font-mono)' }}
-          />
-          <span
-            className="text-[10px] tracking-[0.1em] uppercase text-text-muted"
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            cm
-          </span>
-        </div>
-      </div>
+    <>
+      <Slider
+        label="Your height"
+        readout={`${config.heightCm} cm`}
+        value={config.heightCm}
+        min={HEIGHT_RANGE.min}
+        max={HEIGHT_RANGE.max}
+        onChange={(heightCm) => onChange({ heightCm })}
+      />
 
-      {/* Stride info */}
-      <div className="rounded-[10px] border border-border/50 bg-overlay-hover/30 p-3">
-        <div
-          className="text-[9px] tracking-[0.15em] uppercase text-text-muted mb-2"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Calculated Stride
+      <div className="border-t border-line pt-5">
+        <p className="nd-label mb-2">Calculated stride</p>
+        <div className="flex items-baseline gap-2">
+          <span className="nd-data text-display-md text-ink-display">{strideCm}</span>
+          <span className="nd-label">CM / STEP</span>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span
-            className="text-[18px] font-medium text-text-primary"
-            style={{ fontFamily: 'var(--font-body)' }}
-          >
-            {strideLengthCm}
-          </span>
-          <span
-            className="text-[10px] text-text-muted"
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            cm / step
-          </span>
-        </div>
-        <p
-          className="mt-2 text-[10px] leading-relaxed text-text-muted/70"
-          style={{ fontFamily: 'var(--font-body)' }}
-        >
+        <p className="nd-caption mt-3 text-ink-disabled">
           {config.strideMode === 'walk'
-            ? 'Walking: height × 0.414'
-            : 'Running: height × 0.65'}
+            ? 'WALKING — HEIGHT × 0.414'
+            : 'RUNNING — HEIGHT × 0.65'}
         </p>
       </div>
-    </div>
+    </>
   );
+}
+
+/** Accepts both decimal separators, since the panel is used in es-ES. */
+function parseKm(raw: string): number {
+  const parsed = Number.parseFloat(raw.replace(',', '.'));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }

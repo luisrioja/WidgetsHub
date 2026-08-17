@@ -22,8 +22,9 @@ import { useNow } from '../lib/useNow';
 import SortableItem from './SortableItem';
 import HiddenWidgets from './HiddenWidgets';
 import ThemeToggle from './ThemeToggle';
+import AccountMenu from './AccountMenu';
 
-export default function Dashboard() {
+export default function Dashboard({ onOpenAdmin }: { onOpenAdmin: () => void }) {
   const widgetOrder = useWidgetStore((s) => s.widgetOrder);
   const hiddenWidgets = useWidgetStore((s) => s.hiddenWidgets);
   const initializeOrder = useWidgetStore((s) => s.initializeOrder);
@@ -60,8 +61,8 @@ export default function Dashboard() {
             <p className="nd-label mt-3">Modular instrument panel</p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-4">
-            <span className="nd-data hidden text-body-sm text-ink-muted sm:inline">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+            <span className="nd-data hidden text-body-sm text-ink-muted lg:inline">
               {new Intl.DateTimeFormat('es-ES', {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -69,6 +70,7 @@ export default function Dashboard() {
               }).format(now)}
             </span>
             <ThemeToggle />
+            <AccountMenu onOpenAdmin={onOpenAdmin} />
           </div>
         </header>
 

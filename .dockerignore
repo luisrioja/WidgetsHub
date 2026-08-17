@@ -9,3 +9,8 @@ dist-ssr
 *.md
 *.log
 .DS_Store
+
+# Runtime state never goes into an image; it is bind-mounted at run time.
+data
+deploy
+nothing-design-skill

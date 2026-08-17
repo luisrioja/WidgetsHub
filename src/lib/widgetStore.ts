@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { availableWidgets } from './WidgetRegistry';
+import { syncStorage } from './syncStorage';
 
 interface WidgetStoreState {
   /** Ordered array of visible widget IDs */
@@ -66,6 +67,7 @@ export const useWidgetStore = create<WidgetStoreState>()(
     {
       name: 'antigravity-widgets',
       version: 1,
+      storage: createJSONStorage(() => syncStorage),
     }
   )
 );

@@ -3,6 +3,7 @@ import WidgetPanel from '../components/WidgetPanel';
 import { Segmented, SegmentedBar, Toggle } from '../components/ui';
 import { useWidgetStore } from '../lib/widgetStore';
 import { useNow } from '../lib/useNow';
+import { readState, writeState } from '../lib/syncStorage';
 
 export const title = 'Madrid';
 export const defaultSize = { cols: 1, rows: 1 };
@@ -21,13 +22,7 @@ interface ClockSettings {
 const DEFAULTS: ClockSettings = { use24h: true, showSeconds: true, ink: 'display' };
 
 function loadSettings(): ClockSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<ClockSettings>) };
-  } catch {
-    /* fall through to defaults */
-  }
-  return DEFAULTS;
+  return { ...DEFAULTS, ...readState<Partial<ClockSettings>>(STORAGE_KEY, {}) };
 }
 
 export default function RelojMadrid() {
@@ -38,7 +33,7 @@ export default function RelojMadrid() {
   const update = useCallback((partial: Partial<ClockSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...partial };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      writeState(STORAGE_KEY, next);
       return next;
     });
   }, []);
