@@ -128,6 +128,37 @@ That is why this replacement verifies health and logs both outcomes.
 
 ---
 
+## Troubleshooting: `npm error Exit handler never called!`
+
+If `docker compose build` dies inside `npm ci` with:
+
+```
+npm error Exit handler never called!
+```
+
+the container has no outbound network. npm hangs on the registry and then exits
+with that misleading message — it is not a lockfile or base-image problem.
+
+The usual cause on a developer machine is a host firewall dropping forwarded
+traffic from the Docker bridge (`ufw` ships with `DEFAULT_FORWARD_POLICY="DROP"`).
+Confirm it in one command:
+
+```bash
+# bridge network — hangs when forwarding is blocked
+docker run --rm node:22-alpine wget -qO- --timeout=10 https://registry.npmjs.org/react
+
+# host network — succeeds either way
+docker run --rm --network host node:22-alpine wget -qO- --timeout=10 https://registry.npmjs.org/react
+```
+
+Host-network works while the bridge fails ⇒ it is the firewall, not the build.
+Either allow forwarding for the bridge, or build one-off with
+`docker build --network host`.
+
+The deployment host has no firewall enabled, so this only ever bites locally.
+
+---
+
 ## Backups
 
 The database is the only thing here that is not reproducible from git.
