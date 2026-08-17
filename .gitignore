@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Private infrastructure notes. This repo is public, so they stay local.
+ARQUITECTURA-GLOBAL.md
+
+# Vendored clone of the Nothing design skill (has its own .git).
+nothing-design-skill/
