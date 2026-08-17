@@ -1,15 +1,26 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import WidgetPanel from '../components/WidgetPanel';
+import { Button, Icon, Segmented } from '../components/ui';
 import { useWidgetStore } from '../lib/widgetStore';
 
 export const title = 'Reminders';
 export const defaultSize = { cols: 1, rows: 1 };
 
-/* ============================================
-   Types & Constants
-   ============================================ */
+/* ============================================================
+   Model
+   ============================================================ */
+
+type Priority = 'none' | 'low' | 'medium' | 'high';
+type Filter = 'open' | 'all' | 'done';
+type SortBy = 'manual' | 'date' | 'priority';
 
 interface Reminder {
   id: string;
@@ -17,166 +28,127 @@ interface Reminder {
   completed: boolean;
   createdAt: number;
   completedAt?: number;
-  priority: 'none' | 'low' | 'medium' | 'high';
+  priority: Priority;
   flagged: boolean;
 }
 
 interface RemindersState {
   reminders: Reminder[];
-  showCompleted: boolean;
-  sortBy: 'manual' | 'date' | 'priority';
+  filter: Filter;
+  sortBy: SortBy;
 }
 
 const STORAGE_KEY = 'widgethub-reminders';
 
-const PRIORITY_COLORS: Record<string, string> = {
-  none: 'var(--color-text-muted)',
-  low: '#34C759',
-  medium: '#FF9500',
-  high: '#FF3B30',
+/** Priority is data status, so it earns colour — on the tag only, never a row. */
+const PRIORITY_STYLE: Record<Priority, { tag: string; className: string }> = {
+  none: { tag: '', className: 'text-ink-disabled' },
+  low: { tag: 'LOW', className: 'text-success' },
+  medium: { tag: 'MED', className: 'text-warning' },
+  high: { tag: 'HIGH', className: 'text-accent' },
 };
 
-/* ============================================
-   Persistence
-   ============================================ */
+const PRIORITY_CYCLE: Priority[] = ['none', 'low', 'medium', 'high'];
+const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2, none: 3 };
 
-function loadReminders(): RemindersState {
+const DEFAULTS: RemindersState = { reminders: [], filter: 'open', sortBy: 'manual' };
+
+function loadState(): RemindersState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) throw new Error('no saved state');
-    return JSON.parse(raw);
+    if (!raw) return DEFAULTS;
+    const saved = JSON.parse(raw) as Partial<RemindersState> & {
+      showCompleted?: boolean;
+    };
+    return {
+      reminders: saved.reminders ?? [],
+      // The old shape stored a boolean toggle rather than a filter.
+      filter: saved.filter ?? (saved.showCompleted === false ? 'open' : 'all'),
+      sortBy: saved.sortBy ?? 'manual',
+    };
   } catch {
-    return { reminders: [], showCompleted: true, sortBy: 'manual' };
+    return DEFAULTS;
   }
 }
 
-function saveReminders(state: RemindersState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-/* ============================================
+/* ============================================================
    Component
-   ============================================ */
+   ============================================================ */
 
 export default function Reminders() {
-  const [state, setState] = useState<RemindersState>(loadReminders);
-  const [newText, setNewText] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
+  const [state, setState] = useState<RemindersState>(loadState);
+  const [draft, setDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const editInputRef = useRef<HTMLInputElement>(null);
+  const editRef = useRef<HTMLInputElement>(null);
   const hideWidget = useWidgetStore((s) => s.hideWidget);
 
-  // Persist on change
   useEffect(() => {
-    saveReminders(state);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
-  // Focus input when adding mode activates
   useEffect(() => {
-    if (isAdding) inputRef.current?.focus();
-  }, [isAdding]);
-
-  // Focus edit input
-  useEffect(() => {
-    if (editingId) editInputRef.current?.focus();
+    if (editingId) editRef.current?.focus();
   }, [editingId]);
 
-  const addReminder = useCallback(() => {
-    const text = newText.trim();
+  const patch = useCallback(
+    (id: string, changes: Partial<Reminder>) =>
+      setState((prev) => ({
+        ...prev,
+        reminders: prev.reminders.map((r) => (r.id === id ? { ...r, ...changes } : r)),
+      })),
+    [],
+  );
+
+  const add = useCallback(() => {
+    const text = draft.trim();
     if (!text) return;
-    const reminder: Reminder = {
-      id: crypto.randomUUID(),
-      text,
-      completed: false,
-      createdAt: Date.now(),
-      priority: 'none',
-      flagged: false,
-    };
     setState((prev) => ({
       ...prev,
-      reminders: [reminder, ...prev.reminders],
+      reminders: [
+        {
+          id: crypto.randomUUID(),
+          text,
+          completed: false,
+          createdAt: Date.now(),
+          priority: 'none',
+          flagged: false,
+        },
+        ...prev.reminders,
+      ],
     }));
-    setNewText('');
-  }, [newText]);
+    setDraft('');
+  }, [draft]);
 
-  const toggleComplete = useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      reminders: prev.reminders.map((r) =>
-        r.id === id
-          ? { ...r, completed: !r.completed, completedAt: !r.completed ? Date.now() : undefined }
-          : r
-      ),
-    }));
-  }, []);
-
-  const deleteReminder = useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      reminders: prev.reminders.filter((r) => r.id !== id),
-    }));
-  }, []);
-
-  const toggleFlag = useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      reminders: prev.reminders.map((r) =>
-        r.id === id ? { ...r, flagged: !r.flagged } : r
-      ),
-    }));
-  }, []);
-
-  const setPriority = useCallback((id: string, priority: Reminder['priority']) => {
-    setState((prev) => ({
-      ...prev,
-      reminders: prev.reminders.map((r) =>
-        r.id === id ? { ...r, priority } : r
-      ),
-    }));
-  }, []);
-
-  const startEditing = useCallback((r: Reminder) => {
-    setEditingId(r.id);
-    setEditText(r.text);
-  }, []);
+  const remove = useCallback(
+    (id: string) =>
+      setState((prev) => ({
+        ...prev,
+        reminders: prev.reminders.filter((r) => r.id !== id),
+      })),
+    [],
+  );
 
   const saveEdit = useCallback(() => {
     if (!editingId) return;
     const text = editText.trim();
-    if (text) {
-      setState((prev) => ({
-        ...prev,
-        reminders: prev.reminders.map((r) =>
-          r.id === editingId ? { ...r, text } : r
-        ),
-      }));
-    }
+    if (text) patch(editingId, { text });
     setEditingId(null);
     setEditText('');
-  }, [editingId, editText]);
+  }, [editingId, editText, patch]);
 
-  const clearCompleted = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      reminders: prev.reminders.filter((r) => !r.completed),
-    }));
-  }, []);
+  const openCount = state.reminders.filter((r) => !r.completed).length;
+  const doneCount = state.reminders.length - openCount;
 
-  // Sort reminders
-  const sortedReminders = [...state.reminders].sort((a, b) => {
-    if (state.sortBy === 'date') return b.createdAt - a.createdAt;
-    if (state.sortBy === 'priority') {
-      const order = { high: 0, medium: 1, low: 2, none: 3 };
-      return order[a.priority] - order[b.priority];
-    }
-    return 0; // manual = insertion order
-  });
-
-  const activeReminders = sortedReminders.filter((r) => !r.completed);
-  const completedReminders = sortedReminders.filter((r) => r.completed);
-  const completedCount = completedReminders.length;
+  const visible = useMemo(() => {
+    const rows = state.reminders.filter((r) =>
+      state.filter === 'open' ? !r.completed : state.filter === 'done' ? r.completed : true,
+    );
+    if (state.sortBy === 'date') return [...rows].sort((a, b) => b.createdAt - a.createdAt);
+    if (state.sortBy === 'priority')
+      return [...rows].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+    return rows;
+  }, [state.reminders, state.filter, state.sortBy]);
 
   return (
     <WidgetPanel
@@ -184,547 +156,297 @@ export default function Reminders() {
       onHide={() => hideWidget('Recordatorios')}
       settingsContent={
         <RemindersSettings
-          showCompleted={state.showCompleted}
           sortBy={state.sortBy}
-          completedCount={completedCount}
-          onToggleShowCompleted={() =>
-            setState((prev) => ({ ...prev, showCompleted: !prev.showCompleted }))
-          }
+          doneCount={doneCount}
           onChangeSortBy={(sortBy) => setState((prev) => ({ ...prev, sortBy }))}
-          onClearCompleted={clearCompleted}
+          onClearCompleted={() =>
+            setState((prev) => ({
+              ...prev,
+              reminders: prev.reminders.filter((r) => !r.completed),
+            }))
+          }
         />
       }
     >
-      <div className="flex flex-col gap-1" style={{ maxHeight: '360px', overflowY: 'auto' }}>
-        {/* Active reminders list */}
-        <AnimatePresence initial={false}>
-          {activeReminders.map((reminder) => (
-            <ReminderItem
-              key={reminder.id}
-              reminder={reminder}
-              isEditing={editingId === reminder.id}
-              editText={editText}
-              editInputRef={editInputRef}
-              onToggleComplete={() => toggleComplete(reminder.id)}
-              onDelete={() => deleteReminder(reminder.id)}
-              onToggleFlag={() => toggleFlag(reminder.id)}
-              onSetPriority={(p) => setPriority(reminder.id, p)}
-              onStartEditing={() => startEditing(reminder)}
-              onEditTextChange={setEditText}
-              onSaveEdit={saveEdit}
-            />
-          ))}
-        </AnimatePresence>
+      <div className="flex flex-1 flex-col">
+        <p className="nd-label">Open</p>
 
-        {/* Add new reminder */}
-        <AnimatePresence>
-          {isAdding ? (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-center gap-2.5 py-2"
-            >
-              {/* Empty circle */}
-              <div
-                className="shrink-0 h-[18px] w-[18px] rounded-full border-[1.5px]"
-                style={{ borderColor: 'var(--color-text-muted)' }}
-              />
-              <input
-                ref={inputRef}
-                type="text"
-                value={newText}
-                onChange={(e) => setNewText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    addReminder();
-                    // Keep adding mode open for rapid entry
-                  }
-                  if (e.key === 'Escape') {
-                    setIsAdding(false);
-                    setNewText('');
-                  }
-                }}
-                onBlur={() => {
-                  if (newText.trim()) addReminder();
-                  setIsAdding(false);
-                }}
-                placeholder="New Reminder"
-                className="flex-1 bg-transparent text-[13px] text-text-primary outline-none placeholder:text-text-muted/50"
-                style={{ fontFamily: 'var(--font-body)' }}
-              />
-            </motion.div>
-          ) : (
-            <motion.button
-              key="add-btn"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              onClick={() => setIsAdding(true)}
-              className="flex items-center gap-2.5 py-2.5 text-text-muted hover:text-text-secondary
-                transition-colors duration-150 group"
-            >
-              <div className="shrink-0 flex items-center justify-center h-[18px] w-[18px] rounded-full
-                border-[1.5px] border-dashed border-text-muted/40 group-hover:border-text-secondary/60
-                transition-colors duration-150">
-                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                  <path d="M4 0.5v7M0.5 4h7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <span
-                className="text-[12px] tracking-[0.1em] uppercase"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              >
-                New Reminder
-              </span>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        {/* Layer 1 — the count, not the list. */}
+        <div className="mt-3 flex items-baseline gap-2">
+          <span className="nd-display text-display-lg">
+            {String(openCount).padStart(2, '0')}
+          </span>
+          <span className="nd-label">of {state.reminders.length}</span>
+        </div>
 
-        {/* Completed section */}
-        {completedCount > 0 && state.showCompleted && (
-          <div className="mt-2">
-            <div className="flex items-center gap-2 py-1.5 border-t border-border/50">
-              <span
-                className="text-[10px] tracking-[0.15em] uppercase text-text-muted"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              >
-                Completed ({completedCount})
-              </span>
+        <div className="mt-6">
+          <Segmented
+            label="Filter"
+            value={state.filter}
+            options={[
+              { value: 'open' as Filter, label: 'Open' },
+              { value: 'all' as Filter, label: 'All' },
+              { value: 'done' as Filter, label: 'Done' },
+            ]}
+            onChange={(filter) => setState((prev) => ({ ...prev, filter }))}
+          />
+        </div>
+
+        <div className="mt-4 max-h-[280px] flex-1 overflow-y-auto">
+          {visible.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-center">
+              <p className="text-body-sm text-ink-muted">
+                {state.filter === 'done' ? 'Nothing completed yet' : 'Nothing pending'}
+              </p>
+              <p className="nd-caption text-ink-disabled">Add one below</p>
             </div>
-            <AnimatePresence initial={false}>
-              {completedReminders.map((reminder) => (
-                <ReminderItem
+          ) : (
+            <ul>
+              {visible.map((reminder) => (
+                <ReminderRow
                   key={reminder.id}
                   reminder={reminder}
                   isEditing={editingId === reminder.id}
                   editText={editText}
-                  editInputRef={editInputRef}
-                  onToggleComplete={() => toggleComplete(reminder.id)}
-                  onDelete={() => deleteReminder(reminder.id)}
-                  onToggleFlag={() => toggleFlag(reminder.id)}
-                  onSetPriority={(p) => setPriority(reminder.id, p)}
-                  onStartEditing={() => startEditing(reminder)}
+                  editRef={editRef}
+                  onToggle={() =>
+                    patch(reminder.id, {
+                      completed: !reminder.completed,
+                      completedAt: reminder.completed ? undefined : Date.now(),
+                    })
+                  }
+                  onCyclePriority={() =>
+                    patch(reminder.id, {
+                      priority:
+                        PRIORITY_CYCLE[
+                          (PRIORITY_CYCLE.indexOf(reminder.priority) + 1) %
+                            PRIORITY_CYCLE.length
+                        ],
+                    })
+                  }
+                  onToggleFlag={() => patch(reminder.id, { flagged: !reminder.flagged })}
+                  onDelete={() => remove(reminder.id)}
+                  onStartEdit={() => {
+                    setEditingId(reminder.id);
+                    setEditText(reminder.text);
+                  }}
                   onEditTextChange={setEditText}
                   onSaveEdit={saveEdit}
                 />
               ))}
-            </AnimatePresence>
-          </div>
-        )}
+            </ul>
+          )}
+        </div>
 
-        {/* Empty state */}
-        {state.reminders.length === 0 && !isAdding && (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="text-text-muted/30">
-              <rect x="4" y="4" width="24" height="24" rx="6" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M11 16l3 3 7-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <p className="text-[11px] text-text-muted/50" style={{ fontFamily: 'var(--font-mono)' }}>
-              No reminders yet
-            </p>
-          </div>
-        )}
+        {/* Composer — underline input, the lightest container that works. */}
+        <div className="mt-4 flex items-center gap-3 border-t border-line pt-4">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') add();
+              if (e.key === 'Escape') setDraft('');
+            }}
+            placeholder="NEW REMINDER"
+            aria-label="New reminder"
+            className="min-w-0 flex-1 border-b border-line-strong bg-transparent pb-1
+              font-mono text-caption uppercase tracking-[0.06em] text-ink outline-none
+              transition-colors duration-200 ease-nd
+              placeholder:text-ink-disabled focus:border-ink-display"
+          />
+          <Button size="sm" onClick={add} disabled={!draft.trim()}>
+            Add
+          </Button>
+        </div>
       </div>
     </WidgetPanel>
   );
 }
 
-/* ============================================
-   Reminder Item
-   ============================================ */
+/* ============================================================
+   Row
+   ============================================================ */
 
-function ReminderItem({
+function ReminderRow({
   reminder,
   isEditing,
   editText,
-  editInputRef,
-  onToggleComplete,
-  onDelete,
+  editRef,
+  onToggle,
+  onCyclePriority,
   onToggleFlag,
-  onSetPriority,
-  onStartEditing,
+  onDelete,
+  onStartEdit,
   onEditTextChange,
   onSaveEdit,
 }: {
   reminder: Reminder;
   isEditing: boolean;
   editText: string;
-  editInputRef: React.RefObject<HTMLInputElement | null>;
-  onToggleComplete: () => void;
-  onDelete: () => void;
+  editRef: RefObject<HTMLInputElement | null>;
+  onToggle: () => void;
+  onCyclePriority: () => void;
   onToggleFlag: () => void;
-  onSetPriority: (p: Reminder['priority']) => void;
-  onStartEditing: () => void;
+  onDelete: () => void;
+  onStartEdit: () => void;
   onEditTextChange: (text: string) => void;
   onSaveEdit: () => void;
 }) {
-  const [showActions, setShowActions] = useState(false);
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
-
-  // Close actions on outside click
-  useEffect(() => {
-    if (!showActions) return;
-    const handler = (e: MouseEvent) => {
-      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
-        setShowActions(false);
-      }
-    };
-    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 10);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handler);
-    };
-  }, [showActions]);
-
-  const borderColor = PRIORITY_COLORS[reminder.priority];
+  const priority = PRIORITY_STYLE[reminder.priority];
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 12, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
-      transition={{ duration: 0.2 }}
-      className="group relative flex items-start gap-2.5 py-2 border-b border-border/20 last:border-b-0"
-    >
-      {/* Checkbox circle */}
-      <motion.button
-        whileTap={{ scale: 0.85 }}
-        onClick={onToggleComplete}
-        className="shrink-0 mt-[1px] flex items-center justify-center h-[18px] w-[18px] rounded-full
-          border-[1.5px] transition-all duration-200"
-        style={{
-          borderColor: reminder.completed ? borderColor : borderColor,
-          backgroundColor: reminder.completed ? borderColor : 'transparent',
-        }}
+    <li className="group flex items-start gap-3 border-b border-line py-3 last:border-b-0">
+      <button
+        onClick={onToggle}
+        aria-pressed={reminder.completed}
+        aria-label={reminder.completed ? 'Mark as open' : 'Mark as done'}
+        className={`mt-[2px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-tech
+          border transition-colors duration-200 ease-nd
+          ${
+            reminder.completed
+              ? 'border-ink-display bg-ink-display text-canvas'
+              : 'border-line-strong text-transparent hover:border-ink-display'
+          }`}
       >
-        {/* Checkmark */}
-        <AnimatePresence>
-          {reminder.completed && (
-            <motion.svg
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-              width="10" height="8" viewBox="0 0 10 8" fill="none"
-            >
-              <path d="M1 3.5L3.5 6L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </motion.svg>
-          )}
-        </AnimatePresence>
-      </motion.button>
+        <Icon name="check" size={12} />
+      </button>
 
-      {/* Text */}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         {isEditing ? (
           <input
-            ref={editInputRef}
-            type="text"
+            ref={editRef}
             value={editText}
             onChange={(e) => onEditTextChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') onSaveEdit();
-              if (e.key === 'Escape') onSaveEdit();
+              if (e.key === 'Enter' || e.key === 'Escape') onSaveEdit();
             }}
             onBlur={onSaveEdit}
-            className="w-full bg-transparent text-[13px] text-text-primary outline-none border-b border-text-muted/30 pb-0.5"
-            style={{ fontFamily: 'var(--font-body)' }}
+            aria-label="Edit reminder"
+            className="w-full border-b border-ink-display bg-transparent pb-0.5
+              text-body-sm text-ink outline-none"
           />
         ) : (
-          <p
-            className={`text-[13px] leading-snug cursor-pointer transition-all duration-300 ${
-              reminder.completed
-                ? 'line-through text-text-muted/50'
-                : 'text-text-primary'
-            }`}
-            style={{ fontFamily: 'var(--font-body)' }}
-            onClick={onStartEditing}
+          <button
+            onClick={onStartEdit}
+            className={`block w-full text-left text-body-sm leading-snug transition-colors duration-200 ease-nd
+              ${reminder.completed ? 'text-ink-disabled line-through' : 'text-ink'}`}
           >
             {reminder.text}
-          </p>
+          </button>
         )}
 
-        {/* Meta line: priority badge + flag */}
         {(reminder.priority !== 'none' || reminder.flagged) && !isEditing && (
-          <div className="flex items-center gap-1.5 mt-1">
+          <div className="mt-1.5 flex items-center gap-2">
             {reminder.priority !== 'none' && (
               <span
-                className="text-[9px] font-medium tracking-wider uppercase px-1.5 py-0.5 rounded"
-                style={{
-                  color: PRIORITY_COLORS[reminder.priority],
-                  backgroundColor: `${PRIORITY_COLORS[reminder.priority]}15`,
-                  fontFamily: 'var(--font-mono)',
-                }}
+                className={`font-mono text-[10px] uppercase tracking-[0.08em] ${priority.className}`}
               >
-                {reminder.priority === 'high' ? '!!!' : reminder.priority === 'medium' ? '!!' : '!'}
+                {priority.tag}
               </span>
             )}
             {reminder.flagged && (
-              <svg width="10" height="12" viewBox="0 0 10 12" fill="#FF9500">
-                <path d="M1 1v10M1 1h7l-2 2.5L8 6H1" />
-              </svg>
+              <Icon name="flag" size={11} className="text-warning" />
             )}
           </div>
         )}
       </div>
 
-      {/* Action buttons (on hover or touch) */}
-      <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-        {/* Context menu button */}
-        <button
-          ref={menuButtonRef}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!showActions && menuButtonRef.current) {
-              const rect = menuButtonRef.current.getBoundingClientRect();
-              setMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
-            }
-            setShowActions(!showActions);
-          }}
-          className="flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-overlay-hover"
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-overlay-hover)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-          }}
+      {/* Row actions: always reachable by keyboard, revealed on hover by mouse. */}
+      <div
+        className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-200 ease-nd
+          group-hover:opacity-100 focus-within:opacity-100"
+      >
+        <RowAction
+          label={`Priority: ${reminder.priority}`}
+          onClick={onCyclePriority}
+          className={priority.className}
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-text-muted">
-            <circle cx="2" cy="6" r="1" fill="currentColor" />
-            <circle cx="6" cy="6" r="1" fill="currentColor" />
-            <circle cx="10" cy="6" r="1" fill="currentColor" />
-          </svg>
-        </button>
-
-        {/* Delete button */}
-        <button
-          onClick={onDelete}
-          className="flex h-6 w-6 items-center justify-center rounded-full transition-colors"
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,59,48,0.1)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-          }}
-          title="Delete"
+          <Icon name="alert" size={14} />
+        </RowAction>
+        <RowAction
+          label={reminder.flagged ? 'Unflag' : 'Flag'}
+          onClick={onToggleFlag}
+          className={reminder.flagged ? 'text-warning' : 'text-ink-disabled'}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="text-accent-alarm/60 hover:text-accent-alarm">
-            <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-          </svg>
-        </button>
+          <Icon name="flag" size={14} />
+        </RowAction>
+        <RowAction label="Delete" onClick={onDelete} className="text-ink-disabled hover:text-accent">
+          <Icon name="trash" size={14} />
+        </RowAction>
       </div>
-
-      {/* Context menu dropdown — rendered via portal to avoid clipping */}
-      {showActions && menuPos && createPortal(
-        <AnimatePresence>
-          <motion.div
-            ref={actionsRef}
-            initial={{ opacity: 0, scale: 0.9, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="fixed z-[9999] min-w-[160px] rounded-[12px] border border-border
-              bg-surface py-1.5 shadow-xl"
-            style={{ top: menuPos.top, left: Math.max(8, menuPos.left) }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Priority options */}
-            <ContextMenuLabel>Priority</ContextMenuLabel>
-            {(['none', 'low', 'medium', 'high'] as const).map((p) => (
-              <ContextMenuItem
-                key={p}
-                label={p === 'none' ? 'None' : p.charAt(0).toUpperCase() + p.slice(1)}
-                active={reminder.priority === p}
-                color={PRIORITY_COLORS[p]}
-                onClick={() => { onSetPriority(p); setShowActions(false); }}
-              />
-            ))}
-
-            <div className="my-1.5 border-t border-border/50" />
-
-            {/* Flag */}
-            <ContextMenuItem
-              label={reminder.flagged ? 'Unflag' : 'Flag'}
-              icon="flag"
-              onClick={() => { onToggleFlag(); setShowActions(false); }}
-            />
-
-            {/* Delete */}
-            <ContextMenuItem
-              label="Delete"
-              icon="delete"
-              destructive
-              onClick={() => { onDelete(); setShowActions(false); }}
-            />
-          </motion.div>
-        </AnimatePresence>,
-        document.body
-      )}
-    </motion.div>
+    </li>
   );
 }
 
-/* ============================================
-   Context Menu Components
-   ============================================ */
-
-function ContextMenuLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="px-3 py-1 text-[9px] tracking-[0.15em] uppercase text-text-muted"
-      style={{ fontFamily: 'var(--font-mono)' }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ContextMenuItem({
+function RowAction({
   label,
-  active,
-  color,
-  icon,
-  destructive,
   onClick,
+  className = '',
+  children,
 }: {
   label: string;
-  active?: boolean;
-  color?: string;
-  icon?: string;
-  destructive?: boolean;
   onClick: () => void;
+  className?: string;
+  children: ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-[12px] transition-colors
-        ${destructive ? 'text-accent-alarm hover:bg-accent-alarm/10' : 'text-text-primary hover:bg-overlay-hover'}`}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = destructive
-          ? 'rgba(255,59,48,0.1)'
-          : 'var(--color-overlay-hover)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-      }}
-      style={{ fontFamily: 'var(--font-body)' }}
+      title={label}
+      aria-label={label}
+      className={`flex h-7 w-7 items-center justify-center rounded-tech
+        transition-colors duration-200 ease-nd hover:text-ink-display ${className}`}
     >
-      {color && (
-        <span
-          className="inline-block w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-      )}
-      {icon === 'flag' && (
-        <svg width="10" height="12" viewBox="0 0 10 12" fill="none" className="text-[#FF9500]">
-          <path d="M1 1v10M1 1h7l-2 2.5L8 6H1" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      )}
-      {icon === 'delete' && (
-        <svg width="10" height="11" viewBox="0 0 10 11" fill="none" className="text-accent-alarm">
-          <path d="M1 3h8M3.5 3V2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M2 3l.5 7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1L8 3"
-            stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
-        </svg>
-      )}
-      <span className="flex-1">{label}</span>
-      {active && (
-        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-          <path d="M1 3.5L3.5 6L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
+      {children}
     </button>
   );
 }
 
-/* ============================================
-   Settings Panel
-   ============================================ */
+/* ============================================================
+   Settings
+   ============================================================ */
 
 function RemindersSettings({
-  showCompleted,
   sortBy,
-  completedCount,
-  onToggleShowCompleted,
+  doneCount,
   onChangeSortBy,
   onClearCompleted,
 }: {
-  showCompleted: boolean;
-  sortBy: string;
-  completedCount: number;
-  onToggleShowCompleted: () => void;
-  onChangeSortBy: (sortBy: RemindersState['sortBy']) => void;
+  sortBy: SortBy;
+  doneCount: number;
+  onChangeSortBy: (sortBy: SortBy) => void;
   onClearCompleted: () => void;
 }) {
   return (
-    <div className="space-y-6">
-      {/* Show Completed toggle */}
-      <div className="flex items-center justify-between">
-        <label
-          className="text-[10px] tracking-[0.15em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Show Completed
-        </label>
-        <button
-          onClick={onToggleShowCompleted}
-          className={`relative h-6 w-11 rounded-full transition-colors duration-200
-            ${showCompleted ? 'bg-text-primary' : ''}`}
-          style={{ backgroundColor: showCompleted ? undefined : 'var(--color-slider-track)' }}
-        >
-          <motion.div
-            className="absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow-sm"
-            animate={{ left: showCompleted ? '22px' : '2px' }}
-            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-          />
-        </button>
-      </div>
-
-      {/* Sort by */}
+    <>
       <div>
-        <label
-          className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Sort By
-        </label>
-        <div className="flex gap-2">
-          {([
-            { key: 'manual', label: 'Manual' },
-            { key: 'date', label: 'Date' },
-            { key: 'priority', label: 'Priority' },
-          ] as const).map((opt) => (
-            <motion.button
-              key={opt.key}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onChangeSortBy(opt.key)}
-              className={`rounded-[10px] border px-3.5 py-2 text-[11px] tracking-wider transition-colors
-                ${sortBy === opt.key
-                  ? 'border-text-primary bg-text-primary text-surface'
-                  : 'border-border text-text-muted hover:border-border-hover hover:text-text-secondary'
-                }`}
-              style={{ fontFamily: 'var(--font-mono)' }}
-            >
-              {opt.label}
-            </motion.button>
-          ))}
-        </div>
+        <p className="nd-label mb-2">Sort by</p>
+        <Segmented
+          label="Sort by"
+          value={sortBy}
+          options={[
+            { value: 'manual' as SortBy, label: 'Manual' },
+            { value: 'date' as SortBy, label: 'Date' },
+            { value: 'priority' as SortBy, label: 'Prio' },
+          ]}
+          onChange={onChangeSortBy}
+        />
       </div>
 
-      {/* Clear completed */}
-      {completedCount > 0 && (
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={onClearCompleted}
-          className="w-full rounded-[10px] border border-accent-alarm/30 bg-accent-alarm/10
-            px-4 py-2.5 text-[11px] tracking-[0.1em] uppercase text-accent-alarm
-            transition-colors hover:bg-accent-alarm/20"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Clear {completedCount} Completed
-        </motion.button>
+      <div className="border-t border-line pt-5">
+        <p className="nd-label mb-3">Row actions</p>
+        <p className="text-body-sm leading-relaxed text-ink-muted">
+          Hover a row to cycle priority, flag it or delete it. Click its text to edit.
+        </p>
+      </div>
+
+      {doneCount > 0 && (
+        <div className="border-t border-line pt-5">
+          <Button block size="sm" variant="destructive" onClick={onClearCompleted}>
+            Clear {doneCount} completed
+          </Button>
+        </div>
       )}
-    </div>
+    </>
   );
 }

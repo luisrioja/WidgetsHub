@@ -20,4 +20,15 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // WidgetRegistry discovers widgets by globbing this directory and reading
+    // their `title` / `defaultSize` exports, so these are part of the contract.
+    files: ['src/widgets/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        { allowExportNames: ['title', 'defaultSize'] },
+      ],
+    },
+  },
 ])

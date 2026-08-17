@@ -1,24 +1,20 @@
+import { useEffect } from 'react';
 import Dashboard from './components/Dashboard';
-import { Toaster } from 'sonner';
+import { startGluteEngine } from './lib/gluteEngine';
+import { initAudio } from './lib/audio';
+import { requestNotificationPermissionOnGesture } from './lib/notifications';
 
 export default function App() {
-  return (
-    <>
-      <Dashboard />
-      <Toaster
-        position="bottom-center"
-        toastOptions={{
-          style: {
-            background: '#111111',
-            color: '#ffffff',
-            border: '1px solid rgba(255,255,255,0.08)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '12px',
-            letterSpacing: '0.05em',
-          },
-        }}
-        theme="dark"
-      />
-    </>
-  );
+  useEffect(() => {
+    // Both need a user gesture to succeed, so they arm listeners rather than
+    // firing immediately.
+    initAudio();
+    requestNotificationPermissionOnGesture();
+
+    // The glute timer runs app-wide, independent of whether its widget is
+    // currently mounted or visible.
+    return startGluteEngine();
+  }, []);
+
+  return <Dashboard />;
 }

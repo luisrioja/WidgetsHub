@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type Theme = 'light' | 'dark';
+export type Theme = 'light' | 'dark';
 
 interface ThemeState {
   theme: Theme;
@@ -9,16 +9,13 @@ interface ThemeState {
   setTheme: (theme: Theme) => void;
 }
 
+/** Dark is the authored default: OLED black, white data glowing. */
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: 'light',
+      theme: 'dark',
 
-      toggleTheme: () => {
-        const next = get().theme === 'light' ? 'dark' : 'light';
-        set({ theme: next });
-        applyTheme(next);
-      },
+      toggleTheme: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
 
       setTheme: (theme) => {
         set({ theme });
@@ -27,21 +24,17 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: 'widgethub-theme',
-      version: 1,
+      version: 2,
       onRehydrateStorage: () => (state) => {
-        if (state) {
-          applyTheme(state.theme);
-        }
+        applyTheme(state?.theme ?? 'dark');
       },
-    }
-  )
+    },
+  ),
 );
 
 function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === 'dark') {
-    root.classList.add('dark');
-  } else {
-    root.classList.remove('dark');
-  }
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute('content', theme === 'dark' ? '#000000' : '#F5F5F5');
 }

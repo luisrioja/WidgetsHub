@@ -1,134 +1,97 @@
-import { useState, useEffect, useCallback } from 'react';
-import styles from '../styles/dotmatrix.module.css';
+import { useCallback, useState } from 'react';
 import WidgetPanel from '../components/WidgetPanel';
+import { Segmented, SegmentedBar, Toggle } from '../components/ui';
 import { useWidgetStore } from '../lib/widgetStore';
+import { useNow } from '../lib/useNow';
 
 export const title = 'Madrid';
 export const defaultSize = { cols: 1, rows: 1 };
 
-/* ============================================
-   Settings persistence
-   ============================================ */
+const TZ = 'Europe/Madrid';
+const STORAGE_KEY = 'widgethub-clock-settings';
+
+type Ink = 'display' | 'signal';
 
 interface ClockSettings {
   use24h: boolean;
   showSeconds: boolean;
-  digitColor: string;
+  ink: Ink;
 }
 
-const STORAGE_KEY = 'widgethub-clock-settings';
+const DEFAULTS: ClockSettings = { use24h: true, showSeconds: true, ink: 'display' };
 
 function loadSettings(): ClockSettings {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch { /* ignore */ }
-  return { use24h: true, showSeconds: true, digitColor: '#1a1a1a' };
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<ClockSettings>) };
+  } catch {
+    /* fall through to defaults */
+  }
+  return DEFAULTS;
 }
-
-function saveSettings(s: ClockSettings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-}
-
-/* ============================================
-   Component
-   ============================================ */
 
 export default function RelojMadrid() {
   const [settings, setSettings] = useState<ClockSettings>(loadSettings);
-  const [time, setTime] = useState(() => getMadridTime(settings));
-  const [date, setDate] = useState(() => getMadridDate());
   const hideWidget = useWidgetStore((s) => s.hideWidget);
+  const now = useNow(1000);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTime(getMadridTime(settings));
-      setDate(getMadridDate());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [settings]);
-
-  const updateSettings = useCallback((partial: Partial<ClockSettings>) => {
+  const update = useCallback((partial: Partial<ClockSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...partial };
-      saveSettings(next);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
 
-  const parts = time.split(':');
-  const hours = parts[0];
-  const minutes = parts[1];
-  const seconds = parts[2]; // may be undefined if showSeconds is false
+  const parts = zonedParts(now, settings.use24h);
+  const inkClass = settings.ink === 'signal' ? 'text-accent' : 'text-ink-display';
 
   return (
     <WidgetPanel
       title="Madrid"
       onHide={() => hideWidget('RelojMadrid')}
-      settingsContent={
-        <ClockSettingsPanel settings={settings} onChange={updateSettings} />
-      }
+      settingsContent={<ClockSettingsPanel settings={settings} onChange={update} />}
     >
-      <div className="flex flex-col items-center justify-center py-4">
-        {/* Time display */}
-        <div className="relative flex items-baseline gap-1">
-          <span
-            className={styles.dotmatrixLarge}
-            style={{ color: settings.digitColor, fontSize: 'clamp(3rem, 8vw, 6rem)' }}
-          >
-            {hours}
+      <div className="flex flex-1 flex-col">
+        <p className="nd-label">{TZ}</p>
+
+        {/* Layer 1 — dot-matrix time, the widget's whole reason to exist. */}
+        <div className="mt-3 flex items-baseline gap-2">
+          <span className={`nd-display text-display-xl ${inkClass}`}>
+            {parts.hour}
           </span>
-          <span
-            className={`${styles.dotmatrixLarge} animate-dot-blink`}
-            style={{ color: settings.digitColor, fontSize: 'clamp(3rem, 8vw, 6rem)' }}
-          >
+          <span className={`nd-display text-display-xl ${inkClass} animate-nd-blink`}>
             :
           </span>
-          <span
-            className={styles.dotmatrixLarge}
-            style={{ color: settings.digitColor, fontSize: 'clamp(3rem, 8vw, 6rem)' }}
-          >
-            {minutes}
+          <span className={`nd-display text-display-xl ${inkClass}`}>
+            {parts.minute}
           </span>
-          {settings.showSeconds && seconds && (
-            <span
-              className={styles.dotmatrixMedium}
-              style={{
-                color: settings.digitColor,
-                marginLeft: '4px',
-                opacity: 0.5,
-                fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
-              }}
-            >
-              {seconds}
-            </span>
+          {settings.showSeconds && (
+            <span className="nd-data text-heading text-ink-muted">{parts.second}</span>
+          )}
+          {!settings.use24h && (
+            <span className="nd-label self-start pt-2">{parts.dayPeriod}</span>
           )}
         </div>
 
-        {/* Date */}
-        <p
-          className="mt-3 text-xs tracking-[0.15em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          {date}
-        </p>
+        {/* Seconds as a 60-segment sweep — a second reading of the same clock. */}
+        <div className="mt-6">
+          <SegmentedBar
+            progress={Number(parts.second) / 60}
+            segments={30}
+            height={6}
+            label="Seconds of the current minute"
+          />
+        </div>
 
-        {/* Timezone badge */}
-        <div
-          className="mt-2 rounded-full border border-border px-3 py-0.5 text-[10px]
-            tracking-[0.2em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Europe/Madrid · CET
+        <div className="mt-auto flex items-baseline justify-between border-t border-line pt-4">
+          <span className="nd-label">{parts.date}</span>
+          <span className="nd-data text-caption text-ink-disabled">{parts.offset}</span>
         </div>
       </div>
     </WidgetPanel>
   );
 }
-
-/* ============================================
-   Settings Panel Content
-   ============================================ */
 
 function ClockSettingsPanel({
   settings,
@@ -137,150 +100,95 @@ function ClockSettingsPanel({
   settings: ClockSettings;
   onChange: (partial: Partial<ClockSettings>) => void;
 }) {
-  const presetColors = ['#1a1a1a', '#ff0000', '#0066ff', '#00aa55', '#ff8800', '#9933ff', '#ffffff'];
-
   return (
-    <div className="space-y-6">
-      {/* Time Format */}
+    <>
       <div>
-        <label
-          className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Time Format
-        </label>
-        <div className="flex gap-3">
-          <button
-            onClick={() => onChange({ use24h: true })}
-            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
-              ${settings.use24h
-                ? 'border-text-primary bg-text-primary text-surface'
-                : 'border-border text-text-secondary hover:border-border-hover'
-              }`}
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            24H
-          </button>
-          <button
-            onClick={() => onChange({ use24h: false })}
-            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
-              ${!settings.use24h
-                ? 'border-text-primary bg-text-primary text-surface'
-                : 'border-border text-text-secondary hover:border-border-hover'
-              }`}
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            12H
-          </button>
-        </div>
+        <p className="nd-label mb-2">Format</p>
+        <Segmented
+          label="Time format"
+          value={settings.use24h ? '24' : '12'}
+          options={[
+            { value: '24', label: '24 H' },
+            { value: '12', label: '12 H' },
+          ]}
+          onChange={(v) => onChange({ use24h: v === '24' })}
+        />
       </div>
 
-      {/* Display Format */}
       <div>
-        <label
-          className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Display
-        </label>
-        <div className="flex gap-3">
-          <button
-            onClick={() => onChange({ showSeconds: true })}
-            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
-              ${settings.showSeconds
-                ? 'border-text-primary bg-text-primary text-surface'
-                : 'border-border text-text-secondary hover:border-border-hover'
-              }`}
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            HH:mm:ss
-          </button>
-          <button
-            onClick={() => onChange({ showSeconds: false })}
-            className={`rounded-[10px] border px-4 py-2 text-[11px] tracking-wider transition-all
-              ${!settings.showSeconds
-                ? 'border-text-primary bg-text-primary text-surface'
-                : 'border-border text-text-secondary hover:border-border-hover'
-              }`}
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            HH:mm
-          </button>
-        </div>
+        <p className="nd-label mb-2">Digit ink</p>
+        <Segmented
+          label="Digit ink"
+          value={settings.ink}
+          options={[
+            { value: 'display', label: 'Mono' },
+            { value: 'signal', label: 'Signal' },
+          ]}
+          onChange={(v) => onChange({ ink: v })}
+        />
       </div>
 
-      {/* Digit Color */}
-      <div>
-        <label
-          className="mb-3 block text-[10px] tracking-[0.15em] uppercase text-text-muted"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        >
-          Digit Color
-        </label>
-        <div className="flex items-center gap-3 flex-wrap">
-          {presetColors.map((color) => (
-            <button
-              key={color}
-              onClick={() => onChange({ digitColor: color })}
-              className={`h-6 w-6 rounded-full border-2 transition-all
-                ${settings.digitColor === color
-                  ? 'border-text-primary scale-110'
-                  : 'border-border hover:scale-105'
-                }`}
-              style={{ backgroundColor: color }}
-              title={color}
-            />
-          ))}
-          {/* Custom color picker */}
-          <label className="relative h-6 w-6 cursor-pointer">
-            <input
-              type="color"
-              value={settings.digitColor}
-              onChange={(e) => onChange({ digitColor: e.target.value })}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            />
-            <div
-              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-border
-                bg-gradient-to-br from-red-400 via-green-400 to-blue-400"
-              title="Custom color"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path d="M5 1v8M1 5h8" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-          </label>
-        </div>
+      <div className="flex items-center justify-between border-t border-line pt-5">
+        <p className="nd-label">Seconds</p>
+        <Toggle
+          checked={settings.showSeconds}
+          onChange={() => onChange({ showSeconds: !settings.showSeconds })}
+          label="Show seconds"
+        />
       </div>
-    </div>
+    </>
   );
 }
 
-/* ============================================
+/* ============================================================
    Helpers
-   ============================================ */
+   ============================================================ */
 
-function getMadridTime(settings: ClockSettings): string {
-  const opts: Intl.DateTimeFormatOptions = {
-    timeZone: 'Europe/Madrid',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: !settings.use24h,
-  };
-  if (settings.showSeconds) {
-    opts.second = '2-digit';
-  }
-  let result = new Intl.DateTimeFormat('es-ES', opts).format(new Date());
-  // Remove AM/PM for cleaner display (it'll show in 12h context)
-  result = result.replace(/\s?(a\.?\s?m\.?|p\.?\s?m\.?)/i, '');
-  return result;
+interface ClockParts {
+  hour: string;
+  minute: string;
+  second: string;
+  dayPeriod: string;
+  date: string;
+  offset: string;
 }
 
-function getMadridDate(): string {
-  return new Intl.DateTimeFormat('es-ES', {
-    timeZone: 'Europe/Madrid',
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date());
+/**
+ * `formatToParts` avoids the locale-dependent string surgery the previous
+ * version needed to strip "a. m." out of a formatted time.
+ */
+function zonedParts(ts: number, use24h: boolean): ClockParts {
+  const parts = new Intl.DateTimeFormat('es-ES', {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: !use24h,
+  }).formatToParts(ts);
+
+  const pick = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+
+  const date = new Intl.DateTimeFormat('es-ES', {
+    timeZone: TZ,
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  })
+    .format(ts)
+    .replace(/\./g, '');
+
+  const offset =
+    new Intl.DateTimeFormat('en-GB', { timeZone: TZ, timeZoneName: 'shortOffset' })
+      .formatToParts(ts)
+      .find((p) => p.type === 'timeZoneName')?.value ?? '';
+
+  return {
+    hour: pick('hour').padStart(2, '0'),
+    minute: pick('minute'),
+    second: pick('second'),
+    dayPeriod: pick('dayPeriod').toUpperCase().replace(/\./g, ''),
+    date,
+    offset,
+  };
 }

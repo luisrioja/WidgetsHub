@@ -1,83 +1,64 @@
 /**
- * Notifications utility — Web Notifications API + AudioContext beep
+ * Web Notifications wrapper.
+ *
+ * Permission is requested on the first user gesture rather than on mount —
+ * Chrome silently rejects an unprompted request and then the widget can never
+ * ask again for the origin.
  */
 
-let permissionGranted = false;
+const supported = typeof window !== 'undefined' && 'Notification' in window;
 
-export async function requestNotificationPermission(): Promise<boolean> {
-  if (!('Notification' in window)) {
-    console.warn('Notifications not supported');
-    return false;
-  }
-
-  if (Notification.permission === 'granted') {
-    permissionGranted = true;
-    return true;
-  }
-
-  if (Notification.permission !== 'denied') {
-    const result = await Notification.requestPermission();
-    permissionGranted = result === 'granted';
-    return permissionGranted;
-  }
-
-  return false;
+export function notificationPermission(): NotificationPermission | 'unsupported' {
+  return supported ? Notification.permission : 'unsupported';
 }
 
-export function sendNotification(title: string, body: string): void {
-  if (!permissionGranted && Notification.permission === 'granted') {
-    permissionGranted = true;
-  }
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (!supported) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  return (await Notification.requestPermission()) === 'granted';
+}
 
-  if (permissionGranted) {
-    new Notification(title, {
+/** Attaches a one-shot gesture listener that asks for permission. */
+export function requestNotificationPermissionOnGesture(): void {
+  if (!supported || Notification.permission !== 'default') return;
+
+  const ask = () => {
+    detach();
+    void requestNotificationPermission();
+  };
+  const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown'];
+  const detach = () => events.forEach((e) => window.removeEventListener(e, ask));
+  events.forEach((e) => window.addEventListener(e, ask, { passive: true }));
+}
+
+interface NotifyOptions {
+  /** Collapses repeats of the same alert into one entry. */
+  tag?: string;
+  /** Re-alerts the user when a notification with the same tag is replaced. */
+  renotify?: boolean;
+  /** Keeps the notification on screen until dismissed. */
+  sticky?: boolean;
+}
+
+export function sendNotification(
+  title: string,
+  body: string,
+  { tag = 'widgethub', renotify = false, sticky = false }: NotifyOptions = {},
+): Notification | null {
+  if (!supported || Notification.permission !== 'granted') return null;
+
+  try {
+    return new Notification(title, {
       body,
       icon: '/favicon.svg',
       badge: '/favicon.svg',
-      tag: 'antigravity-alert',
-      requireInteraction: true,
-    });
-  }
-}
-
-/**
- * Synthesized alarm beep via Web Audio API
- * Creates a short, aggressive two-tone beep pattern
- */
-export function playAlarmBeep(): void {
-  try {
-    const ctx = new AudioContext();
-
-    const playTone = (frequency: number, startTime: number, duration: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(frequency, startTime);
-
-      gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(0.15, startTime + 0.01);
-      gain.gain.setValueAtTime(0.15, startTime + duration - 0.05);
-      gain.gain.linearRampToValueAtTime(0, startTime + duration);
-
-      osc.start(startTime);
-      osc.stop(startTime + duration);
-    };
-
-    const now = ctx.currentTime;
-    // Pattern: beep-beep-beep with alternating tones
-    playTone(880, now, 0.12);
-    playTone(660, now + 0.15, 0.12);
-    playTone(880, now + 0.3, 0.12);
-    playTone(660, now + 0.45, 0.12);
-    playTone(1100, now + 0.65, 0.25);
-
-    // Auto-close context after beeps finish
-    setTimeout(() => ctx.close(), 2000);
-  } catch (e) {
-    console.warn('Could not play alarm beep:', e);
+      tag,
+      requireInteraction: sticky,
+      // `renotify` is not in every lib.dom version but is honoured by Chrome.
+      ...(renotify ? { renotify: true } : {}),
+    } as NotificationOptions);
+  } catch {
+    return null;
   }
 }
