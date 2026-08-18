@@ -3,6 +3,7 @@ interface SegmentedProps<T extends string> {
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
   label?: string;
+  className?: string;
 }
 
 /** 2–4 segments. Active inverts to ink-on-canvas — no colour involved. */
@@ -11,12 +12,13 @@ export default function Segmented<T extends string>({
   options,
   onChange,
   label,
+  className = '',
 }: SegmentedProps<T>) {
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className="flex overflow-hidden rounded-control border border-line-strong"
+      className={`flex overflow-hidden rounded-control border border-line-strong ${className}`}
     >
       {options.map((opt, i) => {
         const active = opt.value === value;

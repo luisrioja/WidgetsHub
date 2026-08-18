@@ -22,6 +22,7 @@ import { useNow } from '../lib/useNow';
 import SortableItem from './SortableItem';
 import HiddenWidgets from './HiddenWidgets';
 import ThemeToggle from './ThemeToggle';
+import SearchBar from './SearchBar';
 import AccountMenu from './AccountMenu';
 
 export default function Dashboard({ onOpenAdmin }: { onOpenAdmin: () => void }) {
@@ -74,8 +75,12 @@ export default function Dashboard({ onOpenAdmin }: { onOpenAdmin: () => void }) 
           </div>
         </header>
 
+        {/* Fixed above the grid, and never part of it: the widgets below can be
+            dragged into any order, this stays where it is. */}
+        <SearchBar />
+
         {/* Layer 3 — system metadata, pushed to a hairline rule. */}
-        <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-3">
+        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-3">
           <span className="nd-label">
             {String(widgetOrder.length).padStart(2, '0')} Active
           </span>

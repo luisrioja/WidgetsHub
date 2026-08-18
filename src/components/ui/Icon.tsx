@@ -15,7 +15,8 @@ export type IconName =
   | 'moon'
   | 'flag'
   | 'trash'
-  | 'alert';
+  | 'alert'
+  | 'search';
 
 interface IconProps {
   name: IconName;
@@ -52,6 +53,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="10" cy="10" r="7.5" />
       <path d="M10 6v5M10 13.6v.01" strokeWidth="2" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="8.75" cy="8.75" r="5.25" />
+      <path d="M12.6 12.6 16.5 16.5" />
     </>
   ),
 };
