@@ -54,7 +54,10 @@ export default function Dashboard({ onOpenAdmin }: { onOpenAdmin: () => void }) 
     <div className="dot-grid-subtle min-h-dvh">
       <div className="mx-auto max-w-[1440px] px-6 py-10 sm:px-10 lg:px-14 lg:py-14">
         {/* Layer 1 — the one dot-matrix moment on the page. */}
-        <header className="flex items-start justify-between gap-6">
+        {/* Stacks below sm. The controls cluster is ~310px wide and cannot be
+            squashed any further, so side-by-side with the title overflows the
+            viewport on a phone and scrolls the whole page sideways. */}
+        <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="nd-display text-display-md sm:text-display-lg">
               WIDGET HUB
@@ -62,7 +65,7 @@ export default function Dashboard({ onOpenAdmin }: { onOpenAdmin: () => void }) 
             <p className="nd-label mt-3">Modular instrument panel</p>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+          <div className="flex flex-wrap items-center gap-3 sm:shrink-0 sm:justify-end">
             <span className="nd-data hidden text-body-sm text-ink-muted lg:inline">
               {new Intl.DateTimeFormat('es-ES', {
                 hour: '2-digit',
